@@ -1,5 +1,8 @@
 # Lumina
 
+<img width="1080" height="2340" alt="lumina" src="https://github.com/user-attachments/assets/672ed266-99a9-4cd0-8510-641096a32e85" />
+
+
 A data-rich environmental awareness app for Android. Surfaces solar events, lunar data, tides, tidal currents, and wind conditions — with a UI that dynamically themes itself to match the actual sky state at the current time.
 
 Built for Samsung S24+, min SDK 31.
