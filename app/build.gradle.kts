@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.retrofit.kotlinx.serialization)
 
     implementation(libs.play.services.location)
+    implementation(libs.osmdroid)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
 }

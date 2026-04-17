@@ -334,9 +334,9 @@ private fun DrawScope.dialDrawSun(
     alpha: Float,
     glowRadius: Float,
 ) {
-    drawCircle(color.copy(alpha = alpha * 0.18f), glowRadius * 2.6f, Offset(cx, cy))
-    drawCircle(color.copy(alpha = alpha * 0.45f), glowRadius * 1.5f, Offset(cx, cy))
-    drawCircle(color.copy(alpha = alpha),         9f,                Offset(cx, cy))
+    drawCircle(color.copy(alpha = alpha * 0.22f), glowRadius * 3.0f, Offset(cx, cy))
+    drawCircle(color.copy(alpha = alpha * 0.60f), glowRadius * 1.7f, Offset(cx, cy))
+    drawCircle(color.copy(alpha = alpha),         13f,               Offset(cx, cy))
 }
 
 // ─── Moon drawing ─────────────────────────────────────────────────────────────
@@ -347,9 +347,9 @@ private fun DrawScope.dialDrawMoon(
     alpha: Float,
     glowRadius: Float,
 ) {
-    val radius      = 13f
+    val radius      = 17f
     val illumination = ((1 - cos(2 * PI * phase)) / 2).toFloat()
-    val litColor    = Color(0xFFDDE8FF).copy(alpha = alpha)
+    val litColor    = Color(0xFFEEF4FF).copy(alpha = alpha)
     val darkColor   = Color(0xFF050520).copy(alpha = alpha * 0.95f)
 
     if (illumination > 0.1f) {

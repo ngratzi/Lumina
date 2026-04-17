@@ -12,6 +12,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ngratzi.lumina.ui.alarms.AlarmGroup
+import com.ngratzi.lumina.ui.alarms.AlarmsViewModel
+import com.ngratzi.lumina.ui.alarms.solarGroup
+import com.ngratzi.lumina.ui.alarms.tideGroup
 import com.ngratzi.lumina.ui.theme.LocalSkyTheme
 import com.ngratzi.lumina.ui.theme.SkyPalette
 
@@ -19,9 +23,11 @@ import com.ngratzi.lumina.ui.theme.SkyPalette
 fun SettingsScreen(
     innerPadding: PaddingValues,
     viewModel: SettingsViewModel = hiltViewModel(),
+    alarmsViewModel: AlarmsViewModel = hiltViewModel(),
 ) {
     val palette = LocalSkyTheme.current.palette
     val tailingThreshold by viewModel.tailingTideThreshold.collectAsStateWithLifecycle()
+    val alarms by alarmsViewModel.alarms.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier
@@ -81,6 +87,35 @@ fun SettingsScreen(
             SettingsGroup(palette = palette, title = "Tide Stations") {
                 SettingsRow(palette, "Manage stations", "Up to 5 saved")
             }
+        }
+
+        item {
+            Text(
+                "ALARMS",
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 4.dp),
+            )
+        }
+
+        item {
+            AlarmGroup(
+                palette = palette,
+                title = "Solar & Lunar",
+                alarms = alarms.filter { it.event in solarGroup },
+                onToggle = { event, enabled -> alarmsViewModel.setEnabled(event, enabled) },
+                onOffsetChange = { event, offset -> alarmsViewModel.setOffset(event, offset) },
+            )
+        }
+
+        item {
+            AlarmGroup(
+                palette = palette,
+                title = "Tides & Currents",
+                alarms = alarms.filter { it.event in tideGroup },
+                onToggle = { event, enabled -> alarmsViewModel.setEnabled(event, enabled) },
+                onOffsetChange = { event, offset -> alarmsViewModel.setOffset(event, offset) },
+            )
         }
     }
 }

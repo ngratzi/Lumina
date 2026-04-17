@@ -99,12 +99,24 @@ fun WindCard(
                     color = palette.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
+
+                // Legend
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(bottom = 6.dp),
+                ) {
+                    LegendItem(color = palette.accent, label = "Wind")
+                    if (hourly.take(12).any { (it.gustKnots ?: 0.0) > it.speedKnots + 0.5 }) {
+                        LegendItem(color = palette.accent.copy(alpha = 0.40f), label = "Gusts", dashed = true)
+                    }
+                }
+
                 WindForecastChart(
                     palette = palette,
                     observations = hourly.take(12),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp),
+                        .height(160.dp),
                 )
             }
         }
@@ -142,6 +154,24 @@ private fun WindDirectionArrow(
     }
 }
 
+// ─── Legend item ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun LegendItem(color: Color, label: String, dashed: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Canvas(modifier = Modifier.size(width = 16.dp, height = 2.dp)) {
+            drawLine(
+                color       = color,
+                start       = Offset(0f, size.height / 2),
+                end         = Offset(size.width, size.height / 2),
+                strokeWidth = 2.dp.toPx(),
+                pathEffect  = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4f, 3f)) else null,
+            )
+        }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+    }
+}
+
 // ─── Forecast chart ────────────────────────────────────────────────────────────
 
 @Composable
@@ -155,55 +185,89 @@ private fun WindForecastChart(
     val maxSpeed = observations
         .maxOf { maxOf(it.speedKnots, it.gustKnots ?: 0.0) }
         .coerceAtLeast(10.0)
-    val gridSpeed = when {
-        maxSpeed > 25 -> 20.0
-        maxSpeed > 12 -> 10.0
+
+    // Choose round grid step: 5, 10, or 20 kt
+    val gridStep = when {
+        maxSpeed > 30 -> 20.0
+        maxSpeed > 15 -> 10.0
         else          ->  5.0
     }
-    val showEvery = if (n <= 6) 1 else 3   // how many hourly slots between displayed labels
+    // Grid lines at each step up to maxSpeed
+    val gridLines = generateSequence(gridStep) { it + gridStep }
+        .takeWhile { it < maxSpeed }
+        .toList()
+
+    val showEvery = if (n <= 6) 1 else 2
 
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
 
-        // Zone heights (px)
-        val arrowZoneH  = 38f   // direction arrow + speed label
-        val timeLabelH  = 18f   // hour labels
-        val chartTop    = arrowZoneH
+        // Layout zones
+        val yAxisW     = 36f   // left margin for Y-axis labels
+        val arrowZoneH = 40f   // top: direction arrows + speed labels
+        val timeLabelH = 22f   // bottom: hour labels
+        val chartLeft  = yAxisW
+        val chartTop   = arrowZoneH
         val chartBottom = h - timeLabelH
-        val chartH      = chartBottom - chartTop
+        val chartH     = chartBottom - chartTop
+        val chartW     = w - chartLeft
 
-        // Coordinate helpers
-        fun xOf(i: Int)         = if (n <= 1) w / 2f else i.toFloat() / (n - 1) * w
-        fun yOf(spd: Double)    = chartBottom - (chartH * (spd / maxSpeed)).toFloat()
+        fun xOf(i: Int)      = chartLeft + (if (n <= 1) chartW / 2f else i.toFloat() / (n - 1) * chartW)
+        fun yOf(spd: Double) = chartBottom - (chartH * (spd / maxSpeed)).toFloat()
 
         val speedPts = List(n) { i -> Offset(xOf(i), yOf(observations[i].speedKnots)) }
         val gustPts  = List(n) { i ->
             Offset(xOf(i), yOf(observations[i].gustKnots ?: observations[i].speedKnots))
         }
 
-        // ── Subtle grid reference line ──────────────────────────────────────
-        val gridY = yOf(gridSpeed)
-        if (gridY in chartTop..chartBottom) {
+        val yAxisPaint = AndroidPaint().apply {
+            textSize    = 30f
+            isAntiAlias = true
+            textAlign   = AndroidPaint.Align.RIGHT
+            color       = palette.onSurfaceVariant.copy(alpha = 0.65f).toArgb()
+        }
+        val timePaint = AndroidPaint().apply {
+            textSize    = 30f
+            isAntiAlias = true
+            textAlign   = AndroidPaint.Align.CENTER
+            color       = palette.onSurfaceVariant.copy(alpha = 0.75f).toArgb()
+        }
+        val speedPaint = AndroidPaint().apply {
+            textSize    = 28f
+            isAntiAlias = true
+            textAlign   = AndroidPaint.Align.CENTER
+        }
+
+        // ── Y-axis label ("kt") at top-left ────────────────────────────────
+        // Y-axis unit label
+        drawContext.canvas.nativeCanvas.drawText(
+            "kt",
+            yAxisW - 4f,
+            chartTop - 6f,
+            yAxisPaint,
+        )
+
+        // ── Grid lines + Y-axis labels ──────────────────────────────────────
+        gridLines.forEach { spd ->
+            val y = yOf(spd)
+            if (y < chartTop || y > chartBottom) return@forEach
             drawLine(
-                color       = palette.onSurfaceVariant.copy(alpha = 0.13f),
-                start       = Offset(0f, gridY),
-                end         = Offset(w, gridY),
+                color       = palette.onSurfaceVariant.copy(alpha = 0.15f),
+                start       = Offset(chartLeft, y),
+                end         = Offset(w, y),
                 strokeWidth = 0.8f,
-                pathEffect  = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
+                pathEffect  = PathEffect.dashPathEffect(floatArrayOf(6f, 5f)),
             )
             drawContext.canvas.nativeCanvas.drawText(
-                "${gridSpeed.toInt()} kt",
-                6f, gridY - 5f,
-                AndroidPaint().apply {
-                    color       = palette.onSurfaceVariant.copy(alpha = 0.40f).toArgb()
-                    textSize    = 20f
-                    isAntiAlias = true
-                },
+                spd.toInt().toString(),
+                yAxisW - 4f,
+                y - 5f,
+                yAxisPaint,
             )
         }
 
-        // ── Gust band (shaded area between gust and speed curves) ──────────
+        // ── Gust band ───────────────────────────────────────────────────────
         val hasGusts = observations.any { (it.gustKnots ?: 0.0) > it.speedKnots + 0.5 }
         if (hasGusts) {
             val band = Path().apply {
@@ -213,55 +277,51 @@ private fun WindForecastChart(
                 catmullRomTo(rev, moveFirst = false)
                 close()
             }
-            drawPath(band, palette.accent.copy(alpha = 0.11f))
+            drawPath(band, palette.accent.copy(alpha = 0.13f))
+            // Dashed gust top line
+            drawPath(
+                path  = Path().apply { catmullRomTo(gustPts, moveFirst = true) },
+                color = palette.accent.copy(alpha = 0.45f),
+                style = Stroke(
+                    width     = 1.5f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 4f)),
+                ),
+            )
         }
 
-        // ── Speed area fill (gradient) ──────────────────────────────────────
-        val areaPath = Path().apply {
-            moveTo(speedPts.first().x, chartBottom)
-            lineTo(speedPts.first().x, speedPts.first().y)
-            catmullRomTo(speedPts, moveFirst = false)
-            lineTo(speedPts.last().x, chartBottom)
-            close()
-        }
+        // ── Speed area fill ─────────────────────────────────────────────────
         drawPath(
-            path  = areaPath,
+            path = Path().apply {
+                moveTo(speedPts.first().x, chartBottom)
+                lineTo(speedPts.first().x, speedPts.first().y)
+                catmullRomTo(speedPts, moveFirst = false)
+                lineTo(speedPts.last().x, chartBottom)
+                close()
+            },
             brush = Brush.verticalGradient(
-                colors = listOf(palette.accent.copy(alpha = 0.20f), Color.Transparent),
+                colors = listOf(palette.accent.copy(alpha = 0.22f), Color.Transparent),
                 startY = chartTop,
                 endY   = chartBottom,
             ),
         )
 
-        // ── Speed line ──────────────────────────────────────────────────────
+        // ── Speed line ───────────────────────────────────────────────────────
         drawPath(
             path  = Path().apply { catmullRomTo(speedPts, moveFirst = true) },
-            color = palette.accent.copy(alpha = 0.85f),
-            style = Stroke(width = 2f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+            color = palette.accent.copy(alpha = 0.90f),
+            style = Stroke(width = 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
 
-        // ── Per-slot: direction arrow + speed label + time label ───────────
-        val arrowPaint = AndroidPaint().apply {
-            textSize    = 19f
-            isAntiAlias = true
-            textAlign   = AndroidPaint.Align.CENTER
-            typeface    = android.graphics.Typeface.DEFAULT
-        }
-        val timePaint = AndroidPaint().apply {
-            textSize    = 21f
-            isAntiAlias = true
-            textAlign   = AndroidPaint.Align.CENTER
-        }
-
+        // ── Per-slot: arrow + speed + time ──────────────────────────────────
         observations.forEachIndexed { i, obs ->
             if (i % showEvery != 0) return@forEachIndexed
             val x      = xOf(i)
             val bColor = beaufortColor(obs.beaufortForce)
 
-            // ─ Direction arrow ─────────────────────────────────────────────
+            // Direction arrow
             val arrowCY = 14f
-            val arrowR  = 8f
-            drawCircle(bColor.copy(alpha = 0.15f), arrowR + 3f, Offset(x, arrowCY))
+            val arrowR  = 9f
+            drawCircle(bColor.copy(alpha = 0.18f), arrowR + 3f, Offset(x, arrowCY))
             rotate(obs.directionDeg.toFloat(), Offset(x, arrowCY)) {
                 drawPath(
                     path = Path().apply {
@@ -275,24 +335,23 @@ private fun WindForecastChart(
                 )
             }
 
-            // ─ Speed label ─────────────────────────────────────────────────
-            arrowPaint.color = bColor.copy(alpha = 0.85f).toArgb()
+            // Speed label below arrow
+            speedPaint.color = bColor.copy(alpha = 0.90f).toArgb()
             drawContext.canvas.nativeCanvas.drawText(
                 TimeFormatter.speedLabel(obs.speedKnots),
-                x, arrowZoneH - 3f,
-                arrowPaint,
+                x, arrowZoneH - 4f,
+                speedPaint,
             )
 
-            // ─ Time label ──────────────────────────────────────────────────
-            val hour  = obs.time.hour
+            // Time label
+            val hour = obs.time.hour
             val label = when {
                 hour == 0  -> "12a"
                 hour < 12  -> "${hour}a"
                 hour == 12 -> "12p"
                 else       -> "${hour - 12}p"
             }
-            timePaint.color = palette.onSurfaceVariant.copy(alpha = 0.65f).toArgb()
-            drawContext.canvas.nativeCanvas.drawText(label, x, h - 3f, timePaint)
+            drawContext.canvas.nativeCanvas.drawText(label, x, h - 4f, timePaint)
         }
     }
 }

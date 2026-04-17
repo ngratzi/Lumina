@@ -18,7 +18,7 @@ import com.ngratzi.lumina.data.model.SolarEvent
 import com.ngratzi.lumina.ui.theme.LocalSkyTheme
 import com.ngratzi.lumina.ui.theme.SkyPalette
 
-private val solarGroup = listOf(
+internal val solarGroup = listOf(
     SolarEvent.ASTRONOMICAL_DAWN,
     SolarEvent.BLUE_HOUR_MORNING,
     SolarEvent.GOLDEN_HOUR_MORNING,
@@ -29,7 +29,7 @@ private val solarGroup = listOf(
     SolarEvent.MOONRISE,
 )
 
-private val tideGroup = listOf(
+internal val tideGroup = listOf(
     SolarEvent.HIGH_TIDE,
     SolarEvent.LOW_TIDE,
     SolarEvent.SLACK_WATER_FLOOD,
@@ -86,7 +86,7 @@ fun AlarmsScreen(
 }
 
 @Composable
-private fun AlarmGroup(
+internal fun AlarmGroup(
     palette: SkyPalette,
     title: String,
     alarms: List<AlarmConfig>,

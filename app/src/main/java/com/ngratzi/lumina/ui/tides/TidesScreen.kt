@@ -104,9 +104,7 @@ fun TidesScreen(
                     palette = palette,
                     predictedSamples = uiState.predictedCurve,
                     verifiedSamples = uiState.verifiedCurve,
-                    tideEvents = uiState.tideEvents.filter {
-                        it.time.toLocalDate() == java.time.LocalDate.now()
-                    },
+                    tideEvents = uiState.tideEvents,
                     currentTime = uiState.currentTime,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )

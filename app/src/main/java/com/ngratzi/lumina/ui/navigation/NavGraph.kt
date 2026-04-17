@@ -12,7 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.ngratzi.lumina.ui.alarms.AlarmsScreen
+import com.ngratzi.lumina.ui.charts.ChartsScreen
 import com.ngratzi.lumina.ui.home.HomeScreen
 import com.ngratzi.lumina.ui.settings.SettingsScreen
 import com.ngratzi.lumina.ui.theme.LocalSkyTheme
@@ -21,11 +21,11 @@ import com.ngratzi.lumina.ui.tides.TidesScreen
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     data object Home     : Screen("home",     "Home",    Icons.Rounded.WbSunny)
     data object Tides    : Screen("tides",    "Tides",   Icons.Rounded.Waves)
-    data object Alarms   : Screen("alarms",   "Alarms",  Icons.Rounded.NotificationsNone)
+    data object Charts   : Screen("charts",   "Charts",  Icons.Rounded.Map)
     data object Settings : Screen("settings", "Settings",Icons.Rounded.Settings)
 }
 
-private val bottomNavItems = listOf(Screen.Home, Screen.Tides, Screen.Alarms, Screen.Settings)
+private val bottomNavItems = listOf(Screen.Home, Screen.Tides, Screen.Charts, Screen.Settings)
 
 @Composable
 fun LuminaNavGraph() {
@@ -71,7 +71,7 @@ fun LuminaNavGraph() {
         NavHost(navController = navController, startDestination = Screen.Home.route) {
             composable(Screen.Home.route)     { HomeScreen(innerPadding) }
             composable(Screen.Tides.route)    { TidesScreen(innerPadding) }
-            composable(Screen.Alarms.route)   { AlarmsScreen(innerPadding) }
+            composable(Screen.Charts.route)   { ChartsScreen(innerPadding) }
             composable(Screen.Settings.route) { SettingsScreen(innerPadding) }
         }
     }
