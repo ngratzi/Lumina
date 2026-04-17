@@ -18,10 +18,10 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             AlarmScheduler.ACTION_SOLAR,
             AlarmScheduler.ACTION_TIDE -> {
-                val label  = intent.getStringExtra(AlarmScheduler.EXTRA_LABEL)  ?: return
-                val detail = intent.getStringExtra(AlarmScheduler.EXTRA_DETAIL) ?: ""
-                val event  = intent.getStringExtra(AlarmScheduler.EXTRA_EVENT)  ?: return
-                showNotification(context, event.hashCode(), label, detail)
+                val label = intent.getStringExtra(AlarmScheduler.EXTRA_LABEL) ?: return
+                val body  = intent.getStringExtra(AlarmScheduler.EXTRA_BODY)  ?: ""
+                val event = intent.getStringExtra(AlarmScheduler.EXTRA_EVENT) ?: return
+                showNotification(context, event.hashCode(), label, body)
             }
         }
     }

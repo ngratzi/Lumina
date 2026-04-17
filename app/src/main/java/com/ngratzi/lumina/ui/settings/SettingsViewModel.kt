@@ -2,7 +2,9 @@ package com.ngratzi.lumina.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ngratzi.lumina.data.model.SolarEvent
 import com.ngratzi.lumina.data.repository.UserPreferencesRepository
+import com.ngratzi.lumina.service.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +15,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
+    private val alarmScheduler: AlarmScheduler,
 ) : ViewModel() {
 
     val tailingTideThreshold: StateFlow<Double> = prefs.tailingTideThresholdFt
@@ -24,5 +27,9 @@ class SettingsViewModel @Inject constructor(
 
     fun setTailingTideThreshold(ft: Double) {
         viewModelScope.launch { prefs.setTailingTideThreshold(ft) }
+    }
+
+    fun fireTestAlarm(event: SolarEvent) {
+        alarmScheduler.fireTestNotification(event)
     }
 }

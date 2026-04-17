@@ -78,7 +78,7 @@ fun SkyDial(
             val cy = h / 2f
 
             val ringRadius = w * 0.38f
-            val ringStroke = ringRadius * 0.19f
+            val ringStroke = ringRadius * 0.26f
             val innerR     = ringRadius - ringStroke / 2f
             val outerR     = ringRadius + ringStroke / 2f
 
@@ -336,7 +336,7 @@ private fun DrawScope.dialDrawSun(
 ) {
     drawCircle(color.copy(alpha = alpha * 0.22f), glowRadius * 3.0f, Offset(cx, cy))
     drawCircle(color.copy(alpha = alpha * 0.60f), glowRadius * 1.7f, Offset(cx, cy))
-    drawCircle(color.copy(alpha = alpha),         13f,               Offset(cx, cy))
+    drawCircle(color.copy(alpha = alpha),         17f,               Offset(cx, cy))
 }
 
 // ─── Moon drawing ─────────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ private fun DrawScope.dialDrawMoon(
     alpha: Float,
     glowRadius: Float,
 ) {
-    val radius      = 17f
+    val radius      = 22f
     val illumination = ((1 - cos(2 * PI * phase)) / 2).toFloat()
     val litColor    = Color(0xFFEEF4FF).copy(alpha = alpha)
     val darkColor   = Color(0xFF050520).copy(alpha = alpha * 0.95f)

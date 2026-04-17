@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.ngratzi.lumina.data.model.*
 import com.ngratzi.lumina.data.repository.TideRepository
 import com.ngratzi.lumina.data.repository.UserPreferencesRepository
-import com.ngratzi.lumina.data.repository.WindRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -26,8 +25,6 @@ data class TidesUiState(
     val verifiedCurve: List<WaterLevelSample>? = null,
     val tideEvents: List<TideEvent> = emptyList(),
     val currents: List<TidalCurrent>? = null,
-    val currentWind: WindObservation? = null,
-    val windForecast: WindForecast? = null,
     val currentTime: ZonedDateTime = ZonedDateTime.now(),
     val error: String? = null,
     // Station picker
@@ -44,7 +41,6 @@ data class TidesUiState(
 @HiltViewModel
 class TidesViewModel @Inject constructor(
     private val tideRepository: TideRepository,
-    private val windRepository: WindRepository,
     private val locationHelper: com.ngratzi.lumina.util.LocationHelper,
     private val userPrefs: UserPreferencesRepository,
 ) : ViewModel() {
@@ -190,22 +186,10 @@ class TidesViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             val today = LocalDate.now()
             try {
-                val eventsDeferred    = async { tideRepository.getTideEvents(station.stationId, today) }
-                val curveDeferred     = async { tideRepository.getPredictedCurve(station.stationId, today) }
-                val verifiedDeferred  = async { tideRepository.getVerifiedCurve(station.stationId, today) }
-                val currentDeferred   = async { tideRepository.getTidalCurrents(station.stationId, today) }
-                val noaaWindDeferred  = async {
-                    if (station.hasWindSensor)
-                        windRepository.getNoaaWindObservations(station.stationId, today)
-                    else null
-                }
-                val meteoWindDeferred = async { windRepository.getOpenMeteoForecast(station.lat, station.lon) }
-
-                val noaaWindObs = noaaWindDeferred.await()
-                val currentWind = noaaWindObs?.lastOrNull()
-                    ?: meteoWindDeferred.await()?.hourly?.firstOrNull {
-                        !it.time.isBefore(ZonedDateTime.now())
-                    }
+                val eventsDeferred   = async { tideRepository.getTideEvents(station.stationId, today) }
+                val curveDeferred    = async { tideRepository.getPredictedCurve(station.stationId, today) }
+                val verifiedDeferred = async { tideRepository.getVerifiedCurve(station.stationId, today) }
+                val currentDeferred  = async { tideRepository.getTidalCurrents(station.stationId, today) }
 
                 val tideEvents     = eventsDeferred.await()
                 val predictedCurve = curveDeferred.await().ifEmpty {
@@ -221,8 +205,6 @@ class TidesViewModel @Inject constructor(
                         predictedCurve = predictedCurve,
                         verifiedCurve  = verifiedDeferred.await(),
                         currents       = currentDeferred.await(),
-                        currentWind    = currentWind,
-                        windForecast   = meteoWindDeferred.await(),
                         currentTime    = ZonedDateTime.now(),
                     )
                 }

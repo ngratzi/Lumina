@@ -128,24 +128,39 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun nextEvent(now: ZonedDateTime, sunTimes: SunTimes): Pair<String, Long> {
-        val events = listOf(
-            "Astronomical Dawn" to sunTimes.astronomicalDawn,
-            "Nautical Dawn"     to sunTimes.nauticalDawn,
-            "Blue Hour"         to sunTimes.blueHourStart,
-            "Sunrise"           to sunTimes.sunrise,
-            "Golden Hour"       to sunTimes.goldenHourEnd,
-            "Golden Hour"       to sunTimes.goldenHourStart,
-            "Sunset"            to sunTimes.sunset,
-            "Blue Hour"         to sunTimes.blueHourEnd,
-            "Nautical Dusk"     to sunTimes.nauticalDusk,
+        fun eventsFor(st: SunTimes) = listOf(
+            "Astronomical Dawn" to st.astronomicalDawn,
+            "Nautical Dawn"     to st.nauticalDawn,
+            "Blue Hour"         to st.blueHourStart,
+            "Sunrise"           to st.sunrise,
+            "Golden Hour"       to st.goldenHourEnd,
+            "Golden Hour"       to st.goldenHourStart,
+            "Sunset"            to st.sunset,
+            "Blue Hour"         to st.blueHourEnd,
+            "Nautical Dusk"     to st.nauticalDusk,
         )
-        val next = events
+
+        // Try today's events first
+        val todayNext = eventsFor(sunTimes)
+            .filter { (_, t) -> t != null && t.isAfter(now) }
+            .minByOrNull { (_, t) -> t!! }
+
+        if (todayNext != null) {
+            val minutes = java.time.Duration.between(now, todayNext.second!!).toMinutes()
+            return todayNext.first to minutes
+        }
+
+        // All today's events have passed (e.g. late night) — look at tomorrow
+        val tomorrow = SolarCalculator.getSunTimes(
+            now.toLocalDate().plusDays(1), lat, lon, now.zone
+        )
+        val tomorrowNext = eventsFor(tomorrow)
             .filter { (_, t) -> t != null && t.isAfter(now) }
             .minByOrNull { (_, t) -> t!! }
             ?: return "" to 0L
 
-        val minutes = java.time.Duration.between(now, next.second!!).toMinutes()
-        return next.first to minutes
+        val minutes = java.time.Duration.between(now, tomorrowNext.second!!).toMinutes()
+        return tomorrowNext.first to minutes
     }
 
     private fun phaseProgress(altitude: Double, isEvening: Boolean, phase: SkyPhase): Float {

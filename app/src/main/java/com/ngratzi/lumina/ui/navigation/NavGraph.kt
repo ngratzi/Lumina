@@ -17,15 +17,17 @@ import com.ngratzi.lumina.ui.home.HomeScreen
 import com.ngratzi.lumina.ui.settings.SettingsScreen
 import com.ngratzi.lumina.ui.theme.LocalSkyTheme
 import com.ngratzi.lumina.ui.tides.TidesScreen
+import com.ngratzi.lumina.ui.weather.WeatherScreen
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     data object Home     : Screen("home",     "Home",    Icons.Rounded.WbSunny)
     data object Tides    : Screen("tides",    "Tides",   Icons.Rounded.Waves)
+    data object Weather  : Screen("weather",  "Weather", Icons.Rounded.Cloud)
     data object Charts   : Screen("charts",   "Charts",  Icons.Rounded.Map)
     data object Settings : Screen("settings", "Settings",Icons.Rounded.Settings)
 }
 
-private val bottomNavItems = listOf(Screen.Home, Screen.Tides, Screen.Charts, Screen.Settings)
+private val bottomNavItems = listOf(Screen.Home, Screen.Tides, Screen.Weather, Screen.Charts, Screen.Settings)
 
 @Composable
 fun LuminaNavGraph() {
@@ -71,6 +73,7 @@ fun LuminaNavGraph() {
         NavHost(navController = navController, startDestination = Screen.Home.route) {
             composable(Screen.Home.route)     { HomeScreen(innerPadding) }
             composable(Screen.Tides.route)    { TidesScreen(innerPadding) }
+            composable(Screen.Weather.route)  { WeatherScreen(innerPadding) }
             composable(Screen.Charts.route)   { ChartsScreen(innerPadding) }
             composable(Screen.Settings.route) { SettingsScreen(innerPadding) }
         }

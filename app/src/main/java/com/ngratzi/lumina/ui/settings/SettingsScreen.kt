@@ -1,5 +1,9 @@
 package com.ngratzi.lumina.ui.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ngratzi.lumina.data.model.SolarEvent
 import com.ngratzi.lumina.ui.alarms.AlarmGroup
 import com.ngratzi.lumina.ui.alarms.AlarmsViewModel
 import com.ngratzi.lumina.ui.alarms.solarGroup
@@ -28,6 +33,16 @@ fun SettingsScreen(
     val palette = LocalSkyTheme.current.palette
     val tailingThreshold by viewModel.tailingTideThreshold.collectAsStateWithLifecycle()
     val alarms by alarmsViewModel.alarms.collectAsStateWithLifecycle()
+
+    // Request POST_NOTIFICATIONS at runtime (required Android 13+)
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* result handled silently; user can manage in system settings */ }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -116,6 +131,61 @@ fun SettingsScreen(
                 onToggle = { event, enabled -> alarmsViewModel.setEnabled(event, enabled) },
                 onOffsetChange = { event, offset -> alarmsViewModel.setOffset(event, offset) },
             )
+        }
+
+        item {
+            Text(
+                "QA / TESTING",
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 4.dp),
+            )
+        }
+
+        item {
+            SettingsGroup(palette = palette, title = "Force notifications") {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Fires a test notification immediately regardless of alarm toggle state. " +
+                        "Use to verify notifications are working.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    val qaEvents = listOf(
+                        SolarEvent.SUNRISE,
+                        SolarEvent.GOLDEN_HOUR_MORNING,
+                        SolarEvent.SUNSET,
+                        SolarEvent.GOLDEN_HOUR_EVENING,
+                        SolarEvent.BLUE_HOUR_MORNING,
+                        SolarEvent.MOONRISE,
+                    )
+                    qaEvents.chunked(2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { event ->
+                                OutlinedButton(
+                                    onClick = { viewModel.fireTestAlarm(event) },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = palette.accent,
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        0.5.dp, palette.accent.copy(alpha = 0.5f),
+                                    ),
+                                ) {
+                                    Text(
+                                        event.displayName.replace(" (Morning)", "")
+                                            .replace(" (Evening)", ""),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

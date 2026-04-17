@@ -80,11 +80,13 @@ fun TidesScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             uiState.activeStation?.customLabel ?: uiState.activeStation?.name ?: "",
                             style = MaterialTheme.typography.headlineSmall,
                             color = palette.onSurface,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                         Text(
                             uiState.activeStation?.state ?: "",
@@ -107,18 +109,6 @@ fun TidesScreen(
                     tideEvents = uiState.tideEvents,
                     currentTime = uiState.currentTime,
                     modifier = Modifier.padding(vertical = 8.dp),
-                )
-            }
-
-            // Wind card
-            item {
-                WindCard(
-                    palette = palette,
-                    currentObservation = uiState.currentWind,
-                    forecast = uiState.windForecast,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
 

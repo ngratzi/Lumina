@@ -20,66 +20,52 @@ fun SolarEventList(
     moonData: MoonData?,
     modifier: Modifier = Modifier,
 ) {
-    HorizontalDivider(
-        color = palette.outlineColor,
-        thickness = 0.5.dp,
-        modifier = Modifier.padding(horizontal = 20.dp),
-    )
+    Column(modifier = modifier.fillMaxWidth()) {
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        // ── Solar column ──────────────────────────────────────────────────────
-        Column(modifier = Modifier.weight(1f)) {
+        // ── Solar section ─────────────────────────────────────────────────────
+        HorizontalDivider(color = palette.outlineColor, thickness = 0.5.dp,
+            modifier = Modifier.padding(horizontal = 20.dp))
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
             EventSectionHeader(palette, "SOLAR")
             Spacer(Modifier.height(8.dp))
-            SolarRow(palette, "Astro dawn",  sunTimes.astronomicalDawn)
-            SolarRow(palette, "Nautical",    sunTimes.nauticalDawn)
-            SolarRow(palette, "Blue hour",   sunTimes.blueHourStart)
-            SolarRow(palette, "Sunrise",     sunTimes.sunrise,       accent = true)
-            SolarRow(palette, "Golden hr",   sunTimes.goldenHourEnd)
+            SolarRow(palette, "Astro dawn",  sunTimes.astronomicalDawn,  sunTimes.nauticalDawn)
+            SolarRow(palette, "Nautical",    sunTimes.nauticalDawn,      sunTimes.blueHourStart)
+            SolarRow(palette, "Blue hour",   sunTimes.blueHourStart,     sunTimes.sunrise)
+            SolarRow(palette, "Sunrise",     sunTimes.sunrise,           accent = true)
+            SolarRow(palette, "Golden hr",   sunTimes.sunrise,           sunTimes.goldenHourEnd)
             SolarRow(palette, "Solar noon",  sunTimes.solarNoon)
-            SolarRow(palette, "Golden hr",   sunTimes.goldenHourStart)
-            SolarRow(palette, "Sunset",      sunTimes.sunset,        accent = true)
-            SolarRow(palette, "Blue hour",   sunTimes.blueHourEnd)
-            SolarRow(palette, "Nautical",    sunTimes.nauticalDusk)
-            SolarRow(palette, "Astro dusk",  sunTimes.astronomicalDusk)
+            SolarRow(palette, "Golden hr",   sunTimes.goldenHourStart,   sunTimes.sunset)
+            SolarRow(palette, "Sunset",      sunTimes.sunset,            accent = true)
+            SolarRow(palette, "Blue hour",   sunTimes.sunset,            sunTimes.blueHourEnd)
+            SolarRow(palette, "Nautical",    sunTimes.blueHourEnd,       sunTimes.nauticalDusk)
+            SolarRow(palette, "Astro dusk",  sunTimes.nauticalDusk,      sunTimes.astronomicalDusk)
         }
 
-        // ── Lunar column ──────────────────────────────────────────────────────
-        Column(modifier = Modifier.weight(1f)) {
+        // ── Lunar section ─────────────────────────────────────────────────────
+        HorizontalDivider(color = palette.outlineColor, thickness = 0.5.dp,
+            modifier = Modifier.padding(horizontal = 20.dp))
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
             EventSectionHeader(palette, "LUNAR")
             Spacer(Modifier.height(8.dp))
             if (moonData == null) {
-                Text(
-                    "No data",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.onSurfaceVariant,
-                )
+                Text("No data", style = MaterialTheme.typography.bodySmall,
+                    color = palette.onSurfaceVariant)
             } else {
-                // Phase name + emoji
-                Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                    Text(
-                        text  = "${moonData.phaseEmoji} ${moonData.phaseName}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = palette.onSurface,
-                    )
-                }
-                LunarRow(palette, "Illum",   "${(moonData.illumination * 100).roundToInt()}%")
-                LunarRow(palette, "Rise",    moonData.moonrise?.let { TimeFormatter.formatTime(it) } ?: "—")
+                LunarRow(palette, "Phase",
+                    "${moonData.phaseEmoji} ${moonData.phaseName}",
+                    valueWeight = FontWeight.Medium)
+                LunarRow(palette, "Illumination", "${(moonData.illumination * 100).roundToInt()}%")
+                LunarRow(palette, "Rise",    moonData.moonrise?.let    { TimeFormatter.formatTime(it) } ?: "—")
                 LunarRow(palette, "Transit", moonData.moonTransit?.let { TimeFormatter.formatTime(it) } ?: "—")
-                LunarRow(palette, "Set",     moonData.moonset?.let { TimeFormatter.formatTime(it) } ?: "—")
+                LunarRow(palette, "Set",     moonData.moonset?.let     { TimeFormatter.formatTime(it) } ?: "—")
                 Spacer(Modifier.height(4.dp))
-                LunarRow(palette, "Full",    "in ${moonData.daysToFullMoon}d")
-                LunarRow(palette, "New",     "in ${moonData.daysToNewMoon}d")
+                LunarRow(palette, "Full moon", "in ${moonData.daysToFullMoon}d")
+                LunarRow(palette, "New moon",  "in ${moonData.daysToNewMoon}d")
                 if (moonData.isPerigee || moonData.isApogee) {
                     Spacer(Modifier.height(4.dp))
-                    val label  = if (moonData.isPerigee) "Perigee" else "Apogee"
-                    val value  = "%,.0f km".format(moonData.distanceKm)
-                    LunarRow(palette, label, value, valueColor = palette.accent)
+                    val label = if (moonData.isPerigee) "Perigee" else "Apogee"
+                    LunarRow(palette, label, "%,.0f km".format(moonData.distanceKm),
+                        valueColor = palette.accent)
                 }
             }
         }
@@ -90,11 +76,8 @@ fun SolarEventList(
 
 @Composable
 private fun EventSectionHeader(palette: SkyPalette, label: String) {
-    Text(
-        text  = label,
-        style = MaterialTheme.typography.labelSmall,
-        color = palette.onSurfaceVariant,
-    )
+    Text(text = label, style = MaterialTheme.typography.labelSmall,
+        color = palette.onSurfaceVariant)
 }
 
 @Composable
@@ -102,26 +85,32 @@ private fun SolarRow(
     palette: SkyPalette,
     label: String,
     time: ZonedDateTime?,
+    endTime: ZonedDateTime? = null,
     accent: Boolean = false,
 ) {
+    val timeText = when {
+        time == null    -> "—"
+        endTime != null -> "${TimeFormatter.formatTime(time)} – ${TimeFormatter.formatTime(endTime)}"
+        else            -> TimeFormatter.formatTime(time)
+    }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
+        modifier              = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text  = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = palette.onSurfaceVariant,
+            text     = label,
+            style    = MaterialTheme.typography.bodySmall,
+            color    = palette.onSurfaceVariant,
+            modifier = Modifier.alignByBaseline(),
         )
         Text(
-            text  = time?.let { TimeFormatter.formatTime(it) } ?: "—",
-            style = if (accent)
-                        MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
-                    else
-                        MaterialTheme.typography.bodySmall,
-            color = if (accent) palette.accent else palette.onSurface,
+            text     = timeText,
+            style    = if (accent)
+                           MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                       else
+                           MaterialTheme.typography.bodySmall,
+            color    = if (accent) palette.accent else palette.onSurface,
+            modifier = Modifier.alignByBaseline(),
         )
     }
 }
@@ -132,14 +121,14 @@ private fun LunarRow(
     label: String,
     value: String,
     valueColor: androidx.compose.ui.graphics.Color = palette.onSurface,
+    valueWeight: FontWeight = FontWeight.Normal,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
+        modifier              = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = palette.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodySmall, color = valueColor)
+        Text(value, style = MaterialTheme.typography.bodySmall.copy(fontWeight = valueWeight),
+            color = valueColor)
     }
 }
