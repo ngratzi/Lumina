@@ -154,6 +154,21 @@ fun SkyDial(
             drawCircle(Color.White.copy(alpha = 0.10f), moonInnerR, Offset(cx, cy), style = Stroke(0.8f))
             drawCircle(Color.White.copy(alpha = 0.10f), moonOuterR, Offset(cx, cy), style = Stroke(0.8f))
 
+            // ── Hour tick marks (every hour except the 4 labelled quarter marks) ─
+            for (hour in 0..23) {
+                if (hour % 6 == 0) continue  // skip 12a, 6a, 12p, 6p — they get full ticks
+                val frac     = hour / 24f
+                val angleRad = Math.toRadians((-90.0 + frac * 360.0))
+                val cosA     = cos(angleRad).toFloat()
+                val sinA     = sin(angleRad).toFloat()
+                drawLine(
+                    color       = Color.White.copy(alpha = 0.55f),
+                    start       = Offset(cx + (outerR + 3f) * cosA, cy + (outerR + 3f) * sinA),
+                    end         = Offset(cx + (outerR + 16f) * cosA, cy + (outerR + 16f) * sinA),
+                    strokeWidth = 2f,
+                )
+            }
+
             // ── Tick marks + labels spanning both rings ───────────────────────
             val labelPaint = AndroidPaint().apply {
                 textSize    = 10.dp.toPx()

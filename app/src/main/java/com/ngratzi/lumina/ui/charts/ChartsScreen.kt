@@ -50,8 +50,10 @@ fun ChartsScreen(
     // osmdroid config must run before MapView is constructed.
     val mapView = remember(context) {
         Configuration.getInstance().apply {
-            userAgentValue    = "Lumina/1.0"
-            osmdroidTileCache = File(context.cacheDir, "osmdroid")
+            userAgentValue      = "Lumina/1.0"
+            osmdroidTileCache   = File(context.cacheDir, "osmdroid")
+            tileFileSystemCacheMaxBytes = 100L * 1024 * 1024  // 100 MB cap
+            tileFileSystemCacheTrimBytes = 80L * 1024 * 1024  // trim to 80 MB when over cap
         }
         MapView(context).apply {
             setMultiTouchControls(true)
@@ -368,6 +370,13 @@ private fun MapViewLifecycle(mapView: MapView) {
             }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            // Called when ChartsScreen leaves composition (navigation away).
+            // Without this, every visit creates a new MapView whose tile-download
+            // thread pool and GPU resources are never released, leaking memory
+            // until the system kills other apps via the low-memory killer.
+            mapView.onDetach()
+        }
     }
 }

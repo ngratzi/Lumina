@@ -1,15 +1,16 @@
 package com.ngratzi.lumina.ui.home.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ngratzi.lumina.data.model.SunTimes
 import com.ngratzi.lumina.ui.theme.SkyPalette
@@ -31,15 +32,13 @@ fun SunCard(
         shape = shape,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.WbSunny,
-                    contentDescription = null,
-                    tint = palette.accent,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text("SUN", style = MaterialTheme.typography.labelSmall, color = palette.onSurfaceVariant)
+                SunIcon(color = palette.accent, modifier = Modifier.size(40.dp))
             }
             Spacer(Modifier.height(12.dp))
             SunRow(palette, "Rise",    sunTimes.sunrise)
@@ -90,6 +89,21 @@ fun SunCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SunIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val r  = size.minDimension / 2f
+        // Outer glow
+        drawCircle(color.copy(alpha = 0.15f), r * 0.95f, Offset(cx, cy))
+        // Mid glow
+        drawCircle(color.copy(alpha = 0.35f), r * 0.62f, Offset(cx, cy))
+        // Core
+        drawCircle(color.copy(alpha = 0.95f), r * 0.38f, Offset(cx, cy))
     }
 }
 

@@ -1,9 +1,17 @@
 package com.ngratzi.lumina.ui.home.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ngratzi.lumina.data.model.MoonData
@@ -11,6 +19,9 @@ import com.ngratzi.lumina.data.model.SunTimes
 import com.ngratzi.lumina.ui.theme.SkyPalette
 import com.ngratzi.lumina.util.TimeFormatter
 import java.time.ZonedDateTime
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.roundToInt
 
 @Composable
@@ -26,7 +37,14 @@ fun SolarEventList(
         HorizontalDivider(color = palette.outlineColor, thickness = 0.5.dp,
             modifier = Modifier.padding(horizontal = 20.dp))
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
-            EventSectionHeader(palette, "SOLAR")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("SOLAR", style = MaterialTheme.typography.labelSmall, color = palette.onSurfaceVariant)
+                SunIcon(color = palette.accent, modifier = Modifier.size(32.dp))
+            }
             Spacer(Modifier.height(8.dp))
             SolarRow(palette, "Astro dawn",  sunTimes.astronomicalDawn,  sunTimes.nauticalDawn)
             SolarRow(palette, "Nautical",    sunTimes.nauticalDawn,      sunTimes.blueHourStart)
@@ -45,7 +63,16 @@ fun SolarEventList(
         HorizontalDivider(color = palette.outlineColor, thickness = 0.5.dp,
             modifier = Modifier.padding(horizontal = 20.dp))
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
-            EventSectionHeader(palette, "LUNAR")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("LUNAR", style = MaterialTheme.typography.labelSmall, color = palette.onSurfaceVariant)
+                if (moonData != null) {
+                    MoonPhaseIcon(phase = moonData.phase, modifier = Modifier.size(32.dp))
+                }
+            }
             Spacer(Modifier.height(8.dp))
             if (moonData == null) {
                 Text("No data", style = MaterialTheme.typography.bodySmall,
@@ -75,9 +102,53 @@ fun SolarEventList(
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 @Composable
-private fun EventSectionHeader(palette: SkyPalette, label: String) {
-    Text(text = label, style = MaterialTheme.typography.labelSmall,
-        color = palette.onSurfaceVariant)
+private fun SunIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val r  = size.minDimension / 2f
+        drawCircle(color.copy(alpha = 0.15f), r * 0.95f, Offset(cx, cy))
+        drawCircle(color.copy(alpha = 0.35f), r * 0.62f, Offset(cx, cy))
+        drawCircle(color.copy(alpha = 0.95f), r * 0.38f, Offset(cx, cy))
+    }
+}
+
+@Composable
+private fun MoonPhaseIcon(phase: Double, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cx     = size.width / 2f
+        val cy     = size.height / 2f
+        val radius = size.minDimension / 2f
+        val rect   = Rect(cx - radius, cy - radius, cx + radius, cy + radius)
+        val litColor  = Color(0xFFEEF4FF)
+        val darkColor = Color(0xFF0A0A1E)
+
+        val illumination = ((1 - cos(2 * PI * phase)) / 2).toFloat()
+        if (illumination > 0.05f) {
+            drawCircle(litColor.copy(alpha = illumination * 0.20f), radius * 1.25f, Offset(cx, cy))
+        }
+        drawCircle(darkColor, radius, Offset(cx, cy))
+
+        val terminatorScale = abs(cos(phase * 2 * PI)).toFloat()
+        val termRect = Rect(
+            cx - terminatorScale * radius, cy - radius,
+            cx + terminatorScale * radius, cy + radius,
+        )
+        if (phase <= 0.5) {
+            val litPath = Path().apply { arcTo(rect, -90f, 180f, true); close() }
+            clipRect(cx, cy - radius, cx + radius, cy + radius) { drawPath(litPath, litColor) }
+            if (terminatorScale > 0.02f) {
+                drawPath(Path().apply { addOval(termRect) }, if (phase < 0.25) darkColor else litColor)
+            }
+        } else {
+            val litPath = Path().apply { arcTo(rect, 90f, 180f, true); close() }
+            clipRect(cx - radius, cy - radius, cx, cy + radius) { drawPath(litPath, litColor) }
+            if (terminatorScale > 0.02f) {
+                drawPath(Path().apply { addOval(termRect) }, if (phase < 0.75) litColor else darkColor)
+            }
+        }
+        drawCircle(litColor.copy(alpha = 0.20f), radius, Offset(cx, cy), style = Stroke(1.2f))
+    }
 }
 
 @Composable

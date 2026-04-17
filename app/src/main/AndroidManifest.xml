@@ -30,7 +30,7 @@
 
         <receiver
             android:name=".service.AlarmReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="com.ngratzi.lumina.SOLAR_ALARM" />

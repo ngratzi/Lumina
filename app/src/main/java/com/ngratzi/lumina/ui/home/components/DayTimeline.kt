@@ -80,6 +80,16 @@ fun DayTimeline(
                 }
             }
 
+            // Hour dots (1–23)
+            for (hour in 1..23) {
+                val x = w * (hour / 24f)
+                drawCircle(
+                    color  = Color.White.copy(alpha = 0.22f),
+                    radius = 2f,
+                    center = Offset(x, h - 6f),
+                )
+            }
+
             // Solar event tick marks (sunrise, golden hour transitions, sunset)
             tickEpochs.forEach { epochMs ->
                 val x = w * ((epochMs - midnightMs).toFloat() / dayMs).coerceIn(0f, 1f)
