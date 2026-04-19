@@ -3,12 +3,14 @@ package com.ngratzi.lumina.ui.weather
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ngratzi.lumina.data.model.*
+import com.ngratzi.lumina.data.repository.AppLocationRepository
+import com.ngratzi.lumina.data.repository.UserPreferencesRepository
 import com.ngratzi.lumina.data.repository.WeatherRepository
-import com.ngratzi.lumina.util.LocationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -16,13 +18,15 @@ import javax.inject.Inject
 data class WeatherUiState(
     val isLoading: Boolean = true,
     val weather: WeatherData? = null,
+    val jeepConfig: ToplessJeepConfig = ToplessJeepConfig(),
     val error: String? = null,
 )
 
 @HiltViewModel
 class WeatherViewModel @Inject constructor(
     private val weatherRepository: WeatherRepository,
-    private val locationHelper: LocationHelper,
+    private val locationRepo: AppLocationRepository,
+    private val prefs: UserPreferencesRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WeatherUiState())
@@ -30,6 +34,17 @@ class WeatherViewModel @Inject constructor(
 
     init {
         load()
+        observeJeepConfig()
+    }
+
+    private fun observeJeepConfig() {
+        viewModelScope.launch {
+            combine(prefs.jeepEnabled, prefs.jeepMinTemp, prefs.jeepMaxTemp, prefs.jeepMaxRain) {
+                enabled, minT, maxT, rain -> ToplessJeepConfig(enabled, minT, maxT, rain)
+            }.collect { config ->
+                _uiState.update { it.copy(jeepConfig = config) }
+            }
+        }
     }
 
     fun refresh() = load()
@@ -37,12 +52,12 @@ class WeatherViewModel @Inject constructor(
     private fun load() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val location = locationHelper.getLastLocation()
+            val location = locationRepo.getLocation()
             if (location == null) {
                 _uiState.update { it.copy(isLoading = false, error = "Location unavailable") }
                 return@launch
             }
-            val weather = weatherRepository.fetchWeather(location.latitude, location.longitude)
+            val weather = weatherRepository.fetchWeather(location.lat, location.lon)
             if (weather == null) {
                 _uiState.update { it.copy(isLoading = false, error = "Could not load weather data") }
             } else {

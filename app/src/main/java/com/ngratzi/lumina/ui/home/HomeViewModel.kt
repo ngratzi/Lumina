@@ -3,19 +3,21 @@ package com.ngratzi.lumina.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ngratzi.lumina.data.model.*
+import com.ngratzi.lumina.data.repository.AppLocationRepository
 import com.ngratzi.lumina.data.repository.SolarRepository
 import com.ngratzi.lumina.domain.SolarCalculator
 import com.ngratzi.lumina.ui.theme.SkyPalette
 import com.ngratzi.lumina.ui.theme.SkyThemeTokens
-import com.ngratzi.lumina.util.LocationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import javax.inject.Inject
 
@@ -39,7 +41,7 @@ data class HomeUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val solarRepository: SolarRepository,
-    private val locationHelper: LocationHelper,
+    private val locationRepo: AppLocationRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -47,31 +49,51 @@ class HomeViewModel @Inject constructor(
 
     private var lat = 0.0
     private var lon = 0.0
+    private var displayZone: ZoneId = ZoneId.systemDefault()
 
     init {
         loadLocation()
         startClock()
+        observeLocationChanges()
+    }
+
+    /**
+     * Re-run loadLocation whenever the user changes their location settings.
+     * drop(1) skips the initial emission — loadLocation() in init already handles it.
+     * Works for GPS→Manual, Manual→GPS, and Manual→different city.
+     */
+    fun refresh() = loadLocation()
+
+    private fun observeLocationChanges() {
+        viewModelScope.launch {
+            locationRepo.resolvedLocation
+                .drop(1)
+                .collect { loadLocation() }
+        }
     }
 
     private fun loadLocation() {
         viewModelScope.launch {
-            val location = locationHelper.getCurrentLocation()
+            val location = locationRepo.getLocation()
             if (location == null) {
                 _uiState.update { it.copy(isLoading = false, error = "Location unavailable") }
                 return@launch
             }
-            lat = location.latitude
-            lon = location.longitude
-            val name = locationHelper.reverseGeocode(lat, lon)
-            _uiState.update { it.copy(locationName = name ?: "") }
+            lat = location.lat
+            lon = location.lon
+            displayZone = location.zone
+            _uiState.update { it.copy(
+                locationName = location.displayName,
+                currentTime  = ZonedDateTime.now(displayZone),
+            ) }
             loadSolarData()
         }
     }
 
-    private fun loadSolarData(date: LocalDate = LocalDate.now()) {
+    private fun loadSolarData(date: LocalDate = LocalDate.now(displayZone)) {
         viewModelScope.launch {
-            val sunTimes = solarRepository.getSunTimes(date, lat, lon)
-            val moonData = solarRepository.getMoonData(date, lat, lon)
+            val sunTimes = solarRepository.getSunTimes(date, lat, lon, displayZone)
+            val moonData = solarRepository.getMoonData(date, lat, lon, displayZone)
             _uiState.update { state ->
                 state.copy(
                     sunTimes = sunTimes,
@@ -87,11 +109,11 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 delay(30_000L) // update every 30s
-                val now = ZonedDateTime.now()
+                val now = ZonedDateTime.now(displayZone)
                 val prevDate = _uiState.value.currentTime.toLocalDate()
                 _uiState.update { it.copy(currentTime = now) }
 
-                // Reload solar data at midnight
+                // Reload solar data at midnight (city-local midnight)
                 if (now.toLocalDate() != prevDate) {
                     loadSolarData(now.toLocalDate())
                 } else {

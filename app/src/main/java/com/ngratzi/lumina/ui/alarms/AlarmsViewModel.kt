@@ -5,9 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.ngratzi.lumina.data.model.AlarmConfig
 import com.ngratzi.lumina.data.model.SolarEvent
 import com.ngratzi.lumina.data.repository.AlarmRepository
+import com.ngratzi.lumina.data.repository.AppLocationRepository
 import com.ngratzi.lumina.data.repository.SolarRepository
 import com.ngratzi.lumina.service.AlarmScheduler
-import com.ngratzi.lumina.util.LocationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -19,7 +19,7 @@ class AlarmsViewModel @Inject constructor(
     private val alarmRepository: AlarmRepository,
     private val solarRepository: SolarRepository,
     private val alarmScheduler: AlarmScheduler,
-    private val locationHelper: LocationHelper,
+    private val locationRepo: AppLocationRepository,
 ) : ViewModel() {
 
     val alarms: StateFlow<List<AlarmConfig>> = alarmRepository.observeAlarms()
@@ -49,9 +49,9 @@ class AlarmsViewModel @Inject constructor(
     }
 
     private suspend fun scheduleForToday(event: SolarEvent) {
-        val location = locationHelper.getLastLocation() ?: return
+        val location = locationRepo.getLocation() ?: return
         val sunTimes = solarRepository.getSunTimes(
-            LocalDate.now(), location.latitude, location.longitude,
+            LocalDate.now(), location.lat, location.lon,
         )
         val config = alarmRepository.getAll().find { it.event == event } ?: return
         val time   = event.resolveTime(sunTimes) ?: return

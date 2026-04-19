@@ -3,6 +3,19 @@ package com.ngratzi.lumina.data.model
 import java.time.LocalDate
 import java.time.ZonedDateTime
 
+data class ToplessJeepConfig(
+    val enabled: Boolean = false,
+    val minTempF: Int    = 65,
+    val maxTempF: Int    = 88,
+    val maxRainPct: Int  = 20,
+) {
+    fun isToplessDay(tempMin: Double, tempMax: Double, precipPct: Int): Boolean =
+        enabled &&
+        tempMax >= minTempF &&     // high of day reaches minimum comfort temp
+        tempMax <= maxTempF &&     // high doesn't get too hot
+        precipPct <= maxRainPct
+}
+
 enum class PressureTrend {
     RISING_FAST, RISING, STEADY, FALLING, FALLING_FAST;
 
@@ -58,9 +71,11 @@ data class DailyForecast(
 
 data class WeatherData(
     val current: CurrentWeather,
-    val hourly: List<HourlyWeather>,           // next 12 hours
-    val daily: List<DailyForecast>,            // 7 days
-    val pressureHistory: List<Pair<ZonedDateTime, Double>>, // 24h for sparkline
+    val hourly: List<HourlyWeather>,                           // next 24 hours
+    val daily: List<DailyForecast>,                            // 7 days
+    val pressureHourly: List<Pair<ZonedDateTime, Double>>,     // 24h past + 24h future
+    val pressureDaily: List<Pair<java.time.LocalDate, Double>>, // 7-day noon values
+    val windDailySummaries: List<WindDailySummary>,            // 7-day daily wind
 )
 
 fun wmoCondition(code: Int): String = when (code) {

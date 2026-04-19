@@ -1,5 +1,6 @@
 package com.ngratzi.lumina.data.model
 
+import java.time.LocalDate
 import java.time.ZonedDateTime
 
 enum class WindSource { NOAA_STATION, OPEN_METEO }
@@ -50,6 +51,13 @@ data class WindObservation(
     }
 }
 
+data class WindDailySummary(
+    val date: LocalDate,
+    val maxSpeedKnots: Double,
+    val directionDeg: Double,   // noon direction
+)
+
 data class WindForecast(
     val hourly: List<WindObservation>,
+    val daily: List<WindDailySummary> = emptyList(),
 )

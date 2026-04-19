@@ -5,17 +5,25 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ngratzi.lumina.data.model.LocationMode
 import com.ngratzi.lumina.data.model.SolarEvent
 import com.ngratzi.lumina.ui.alarms.AlarmGroup
 import com.ngratzi.lumina.ui.alarms.AlarmsViewModel
@@ -23,7 +31,9 @@ import com.ngratzi.lumina.ui.alarms.solarGroup
 import com.ngratzi.lumina.ui.alarms.tideGroup
 import com.ngratzi.lumina.ui.theme.LocalSkyTheme
 import com.ngratzi.lumina.ui.theme.SkyPalette
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     innerPadding: PaddingValues,
@@ -31,8 +41,20 @@ fun SettingsScreen(
     alarmsViewModel: AlarmsViewModel = hiltViewModel(),
 ) {
     val palette = LocalSkyTheme.current.palette
-    val tailingThreshold by viewModel.tailingTideThreshold.collectAsStateWithLifecycle()
+    val tailingThreshold  by viewModel.tailingTideThreshold.collectAsStateWithLifecycle()
+    val jeepEnabled       by viewModel.jeepEnabled.collectAsStateWithLifecycle()
+    val jeepMinTemp       by viewModel.jeepMinTemp.collectAsStateWithLifecycle()
+    val jeepMaxTemp       by viewModel.jeepMaxTemp.collectAsStateWithLifecycle()
+    val jeepMaxRain       by viewModel.jeepMaxRain.collectAsStateWithLifecycle()
     val alarms by alarmsViewModel.alarms.collectAsStateWithLifecycle()
+    val locationMode by viewModel.locationMode.collectAsStateWithLifecycle()
+    val manualLocationName by viewModel.manualLocationName.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showLocationSheet by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     // Request POST_NOTIFICATIONS at runtime (required Android 13+)
     val notifPermissionLauncher = rememberLauncherForActivityResult(
@@ -64,7 +86,16 @@ fun SettingsScreen(
 
         item {
             SettingsGroup(palette = palette, title = "Location") {
-                SettingsRow(palette, "Solar location", "GPS (auto)")
+                val locationValue = when (locationMode) {
+                    LocationMode.GPS    -> "GPS (auto)"
+                    LocationMode.MANUAL -> manualLocationName.ifBlank { "Manual" }
+                }
+                SettingsTappableRow(
+                    palette = palette,
+                    label   = "Solar location",
+                    value   = locationValue,
+                    onClick = { showLocationSheet = true },
+                )
                 SettingsRow(palette, "Active tide station", "Tap Tides screen to change")
             }
         }
@@ -101,6 +132,51 @@ fun SettingsScreen(
         item {
             SettingsGroup(palette = palette, title = "Tide Stations") {
                 SettingsRow(palette, "Manage stations", "Up to 5 saved")
+            }
+        }
+
+        item {
+            SettingsGroup(palette = palette, title = "Topless Jeep 🚙") {
+                SettingsToggleRow(
+                    palette         = palette,
+                    label           = "Show Jeep indicator on forecast",
+                    checked         = jeepEnabled,
+                    onCheckedChange = { viewModel.setJeepEnabled(it) },
+                )
+                if (jeepEnabled) {
+                    HorizontalDivider(
+                        color     = palette.outlineColor,
+                        thickness = 0.5.dp,
+                        modifier  = Modifier.padding(horizontal = 12.dp),
+                    )
+                    SettingsSliderRow(
+                        palette       = palette,
+                        label         = "Min temperature",
+                        description   = "Day must not drop below this",
+                        value         = jeepMinTemp.toFloat(),
+                        onValueChange = { viewModel.setJeepMinTemp(it.toInt()) },
+                        valueRange    = 40f..85f,
+                        valueLabel    = "$jeepMinTemp°F",
+                    )
+                    SettingsSliderRow(
+                        palette       = palette,
+                        label         = "Max temperature",
+                        description   = "Day must not exceed this",
+                        value         = jeepMaxTemp.toFloat(),
+                        onValueChange = { viewModel.setJeepMaxTemp(it.toInt()) },
+                        valueRange    = 60f..105f,
+                        valueLabel    = "$jeepMaxTemp°F",
+                    )
+                    SettingsSliderRow(
+                        palette       = palette,
+                        label         = "Max chance of rain",
+                        description   = "Hide Jeep above this rain probability",
+                        value         = jeepMaxRain.toFloat(),
+                        onValueChange = { viewModel.setJeepMaxRain(it.toInt()) },
+                        valueRange    = 0f..60f,
+                        valueLabel    = "$jeepMaxRain%",
+                    )
+                }
             }
         }
 
@@ -187,6 +263,27 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    // ── Location picker bottom sheet ─────────────────────────────────────────
+    if (showLocationSheet) {
+        LocationPickerSheet(
+            palette            = palette,
+            sheetState         = sheetState,
+            locationMode       = locationMode,
+            manualLocationName = manualLocationName,
+            searchResults      = searchResults,
+            isSearching        = isSearching,
+            onGpsMode          = { viewModel.setGpsMode() },
+            onSearch           = { viewModel.searchLocations(it) },
+            onSelectResult     = { viewModel.selectLocation(it) },
+            onDismiss          = {
+                scope.launch { sheetState.hide() }.invokeOnCompletion {
+                    showLocationSheet = false
+                    viewModel.clearSearchResults()
+                }
+            },
+        )
     }
 }
 
@@ -303,5 +400,162 @@ private fun SettingsSliderRow(
                 inactiveTrackColor  = palette.outlineColor,
             ),
         )
+    }
+}
+
+@Composable
+private fun SettingsTappableRow(palette: SkyPalette, label: String, value: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = palette.onSurface)
+        Text(value, style = MaterialTheme.typography.bodySmall, color = palette.accent)
+    }
+}
+
+// ─── Location picker sheet ────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LocationPickerSheet(
+    palette: SkyPalette,
+    sheetState: SheetState,
+    locationMode: com.ngratzi.lumina.data.model.LocationMode,
+    manualLocationName: String,
+    searchResults: List<com.ngratzi.lumina.data.model.GeocodedResult>,
+    isSearching: Boolean,
+    onGpsMode: () -> Unit,
+    onSearch: (String) -> Unit,
+    onSelectResult: (com.ngratzi.lumina.data.model.GeocodedResult) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState       = sheetState,
+        containerColor   = palette.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                "Solar location",
+                style = MaterialTheme.typography.titleMedium,
+                color = palette.onSurface,
+            )
+
+            // GPS / Manual toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(0.5.dp, palette.outlineColor, RoundedCornerShape(12.dp)),
+            ) {
+                listOf(LocationMode.GPS to "GPS (auto)", LocationMode.MANUAL to "Manual city").forEachIndexed { idx, (mode, label) ->
+                    val selected = locationMode == mode
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (mode == LocationMode.GPS) onGpsMode()
+                                // Manual mode is activated automatically when a city is selected
+                            },
+                        color = if (selected) palette.accent.copy(alpha = 0.18f) else palette.surfaceDim,
+                        shape = when (idx) {
+                            0 -> RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
+                            else -> RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp)
+                        },
+                    ) {
+                        Text(
+                            text     = label,
+                            style    = MaterialTheme.typography.bodyMedium,
+                            color    = if (selected) palette.accent else palette.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 16.dp),
+                        )
+                    }
+                }
+            }
+
+            if (locationMode == LocationMode.MANUAL && manualLocationName.isNotBlank()) {
+                Text(
+                    "Current: $manualLocationName",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.onSurfaceVariant,
+                )
+            }
+
+            // Search field
+            OutlinedTextField(
+                value         = query,
+                onValueChange = {
+                    query = it
+                    onSearch(it)
+                },
+                modifier      = Modifier.fillMaxWidth(),
+                placeholder   = { Text("Search city…", color = palette.onSurfaceVariant) },
+                leadingIcon   = { Icon(Icons.Rounded.Search, null, tint = palette.onSurfaceVariant) },
+                trailingIcon  = if (query.isNotEmpty()) {
+                    { IconButton(onClick = { query = ""; onSearch("") }) {
+                        Icon(Icons.Rounded.Close, null, tint = palette.onSurfaceVariant)
+                    }}
+                } else null,
+                singleLine    = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                colors        = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor   = palette.accent,
+                    unfocusedBorderColor = palette.outlineColor,
+                    focusedTextColor     = palette.onSurface,
+                    unfocusedTextColor   = palette.onSurface,
+                    cursorColor          = palette.accent,
+                ),
+            )
+
+            if (isSearching) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .align(Alignment.CenterHorizontally),
+                    color    = palette.accent,
+                    strokeWidth = 2.dp,
+                )
+            }
+
+            // Results list
+            if (searchResults.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(0.5.dp, palette.outlineColor, RoundedCornerShape(12.dp)),
+                ) {
+                    searchResults.forEachIndexed { idx, result ->
+                        if (idx > 0) HorizontalDivider(color = palette.outlineColor, thickness = 0.5.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectResult(result); onDismiss() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        ) {
+                            Text(
+                                result.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = palette.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

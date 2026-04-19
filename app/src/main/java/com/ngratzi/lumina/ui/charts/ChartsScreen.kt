@@ -1,7 +1,12 @@
 package com.ngratzi.lumina.ui.charts
 
+import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
+import android.graphics.Canvas
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,7 +40,6 @@ import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.TilesOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 
 @Composable
@@ -43,9 +47,29 @@ fun ChartsScreen(
     innerPadding: PaddingValues,
     viewModel: ChartsViewModel = hiltViewModel(),
 ) {
-    val palette = LocalSkyTheme.current.palette
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val palette  = LocalSkyTheme.current.palette
+    val uiState  by viewModel.uiState.collectAsStateWithLifecycle()
+    val context  = LocalContext.current
+
+    // ── Compass heading from rotation-vector sensor ───────────────────────────
+    var compassBearing by remember { mutableStateOf<Float?>(null) }
+    DisposableEffect(Unit) {
+        val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val sensor = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        val rotMatrix = FloatArray(9)
+        val orientation = FloatArray(3)
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                SensorManager.getRotationMatrixFromVector(rotMatrix, event.values)
+                SensorManager.getOrientation(rotMatrix, orientation)
+                val deg = Math.toDegrees(orientation[0].toDouble()).toFloat()
+                compassBearing = (deg + 360f) % 360f
+            }
+            override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
+        }
+        sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        onDispose { sm.unregisterListener(listener) }
+    }
 
     // osmdroid config must run before MapView is constructed.
     val mapView = remember(context) {
@@ -68,15 +92,21 @@ fun ChartsScreen(
     // All overlay instances are created once here and reused for every layer
     // switch. Creating/destroying MapTileProviderBasic on each switch caused
     // accumulated stale providers that corrupted tile loading across layers.
+    val accentArgb = palette.accent.toArgb()
     val locationOverlay = remember(mapView) {
-        MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply {
-            enableMyLocation()
-            val bmp = vesselBitmap(context, palette.accent.toArgb())
-            setPersonIcon(bmp)
-            setDirectionIcon(bmp)
-        }
+        DirectionOverlay(
+            context     = context,
+            arrowBitmap = locationArrowBitmap(context, accentArgb),
+            dotBitmap   = locationDotBitmap(context, accentArgb),
+        )
     }
     val openSeaMapOverlay = remember(context) { tilesOverlay(context, OpenSeaMapSource) }
+
+    // Push compass bearing into the overlay every time it changes
+    LaunchedEffect(compassBearing) {
+        locationOverlay.compassBearing = compassBearing
+        mapView.postInvalidate()
+    }
 
     LaunchedEffect(uiState.selectedLayer) {
         applyLayer(mapView, uiState.selectedLayer, locationOverlay, openSeaMapOverlay)
@@ -110,7 +140,11 @@ fun ChartsScreen(
             verticalAlignment     = Alignment.CenterVertically,
         ) {
             MapPill("CHARTS")
-            MapPill(uiState.selectedLayer.description)
+            if (compassBearing != null) {
+                MapPill(formatBearing(compassBearing!!))
+            } else {
+                MapPill(uiState.selectedLayer.description)
+            }
         }
 
         // ── Layer picker ──────────────────────────────────────────────────────
@@ -173,7 +207,7 @@ fun ChartsScreen(
 private fun applyLayer(
     map: MapView,
     layer: ChartLayer,
-    locationOverlay: MyLocationNewOverlay,
+    locationOverlay: DirectionOverlay,
     openSeaMapOverlay: TilesOverlay,
 ) {
     // Only remove overlays we own — never wipe the list, which would remove
@@ -183,19 +217,14 @@ private fun applyLayer(
 
     when (layer) {
         ChartLayer.NAUTICAL -> {
-            // Street map base + OpenSeaMap nav marks (buoys, lights, beacons).
             map.setTileSource(TileSourceFactory.MAPNIK)
             map.overlays.add(openSeaMapOverlay)
         }
         ChartLayer.OCEAN -> {
-            // ESRI World Ocean Base — global bathymetric chart derived from
-            // GEBCO + NOAA data. Shows depth contours, depth labels, and
-            // soundings at zoom 12+. OpenSeaMap adds nav marks on top.
             map.setTileSource(EsriOceanSource)
             map.overlays.add(openSeaMapOverlay)
         }
         ChartLayer.SATELLITE -> {
-            // ESRI true-colour satellite imagery + OpenSeaMap nav marks.
             map.setTileSource(EsriImagerySource)
             map.overlays.add(openSeaMapOverlay)
         }
@@ -258,55 +287,146 @@ private val EsriImagerySource = object : OnlineTileSourceBase(
         "/${MapTileIndex.getX(pMapTileIndex)}"
 }
 
-// ─── Vessel icon ──────────────────────────────────────────────────────────────
+// ─── Custom direction overlay ─────────────────────────────────────────────────
 
 /**
- * Top-down vessel silhouette — pointed bow at the top, rounded stern at the
- * bottom, drawn in the app's accent colour with a glow ring.
- * osmdroid rotates the direction icon to match GPS heading automatically.
+ * Draws a GPS-positioned arrow that rotates to the compass bearing.
+ * Unlike MyLocationNewOverlay, this always shows the arrow — it does not
+ * fall back to a static dot when GPS bearing is unavailable.
  */
-private fun vesselBitmap(context: android.content.Context, accentArgb: Int): Bitmap {
+private class DirectionOverlay(
+    context: Context,
+    private val arrowBitmap: Bitmap,
+    private val dotBitmap: Bitmap,
+) : org.osmdroid.views.overlay.Overlay(),
+    org.osmdroid.views.overlay.mylocation.IMyLocationConsumer {
+
+    var compassBearing: Float? = null
+    private var location: android.location.Location? = null
+    private val provider = GpsMyLocationProvider(context).also { it.startLocationProvider(this) }
+
+    fun destroy() { provider.stopLocationProvider() }
+
+    override fun onLocationChanged(
+        location: android.location.Location?,
+        source: org.osmdroid.views.overlay.mylocation.IMyLocationProvider?,
+    ) { this.location = location }
+
+    override fun draw(
+        canvas: android.graphics.Canvas,
+        mapView: MapView,
+        shadow: Boolean,
+    ) {
+        val loc = location ?: return
+        val pt  = mapView.projection.toPixels(GeoPoint(loc.latitude, loc.longitude), null)
+        val x   = pt.x.toFloat()
+        val y   = pt.y.toFloat()
+        val bearing = compassBearing
+        val bmp = if (bearing != null) arrowBitmap else dotBitmap
+
+        canvas.save()
+        if (bearing != null) canvas.rotate(bearing, x, y)
+        canvas.drawBitmap(bmp, x - bmp.width / 2f, y - bmp.height / 2f, null)
+        canvas.restore()
+    }
+}
+
+// ─── Location icons ───────────────────────────────────────────────────────────
+
+/** Static dot — shown when no heading is available. */
+private fun locationDotBitmap(context: android.content.Context, accentArgb: Int): Bitmap {
     val dp   = context.resources.displayMetrics.density
-    val size = (40 * dp).toInt()
+    val size = (28 * dp).toInt()
     val bmp  = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val cv   = android.graphics.Canvas(bmp)
     val cx   = size / 2f
     val cy   = size / 2f
-    val hw   = size * 0.26f
-    val fwd  = size * 0.44f
-    val aft  = size * 0.40f
+    val r    = size * 0.32f
 
-    val glowPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color      = accentArgb
-        alpha      = 55
-        maskFilter = BlurMaskFilter(size * 0.28f, BlurMaskFilter.Blur.NORMAL)
-    }
-    cv.drawCircle(cx, cy, size * 0.38f, glowPaint)
+    // Halo
+    cv.drawCircle(cx, cy, size * 0.46f,
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = accentArgb; alpha = 50
+        })
+    // Fill
+    cv.drawCircle(cx, cy, r,
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = accentArgb
+        })
+    // White border
+    cv.drawCircle(cx, cy, r,
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE; style = android.graphics.Paint.Style.STROKE
+            strokeWidth = size * 0.07f
+        })
+    return bmp
+}
 
-    val hullPath = android.graphics.Path().apply {
-        moveTo(cx, cy - fwd)
-        cubicTo(cx + hw, cy - fwd * 0.35f, cx + hw, cy + aft * 0.4f, cx, cy + aft)
-        cubicTo(cx - hw, cy + aft * 0.4f, cx - hw, cy - fwd * 0.35f, cx, cy - fwd)
+/**
+ * Sharp navigation arrow — points up (north). osmdroid rotates this bitmap
+ * automatically to match the GPS/compass heading.
+ *
+ * Shape: elongated teardrop with a deep rear notch, like a Google Maps
+ * navigation cursor. The point is unmistakably directional.
+ */
+private fun locationArrowBitmap(context: android.content.Context, accentArgb: Int): Bitmap {
+    val dp   = context.resources.displayMetrics.density
+    val size = (52 * dp).toInt()
+    val bmp  = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val cv   = android.graphics.Canvas(bmp)
+    val cx   = size / 2f
+    val cy   = size / 2f
+
+    // Dimensions
+    val tip    = cy - size * 0.44f   // sharp tip (top)
+    val base   = cy + size * 0.40f   // base corners Y
+    val hw     = size * 0.28f        // half-width at base
+    val notch  = cy + size * 0.14f   // rear notch Y (deep inward cut)
+
+    // Drop shadow
+    cv.drawPath(android.graphics.Path().apply {
+        moveTo(cx, tip + size * 0.03f)
+        lineTo(cx + hw, base + size * 0.03f)
+        lineTo(cx, notch + size * 0.03f)
+        lineTo(cx - hw, base + size * 0.03f)
+        close()
+    }, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.BLACK; alpha = 55
+        maskFilter = android.graphics.BlurMaskFilter(size * 0.08f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+    })
+
+    // Accent fill
+    val arrowPath = android.graphics.Path().apply {
+        moveTo(cx, tip)
+        lineTo(cx + hw, base)
+        lineTo(cx, notch)
+        lineTo(cx - hw, base)
         close()
     }
-    cv.drawPath(hullPath, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+    cv.drawPath(arrowPath, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color = accentArgb
         style = android.graphics.Paint.Style.FILL
     })
-    cv.drawPath(hullPath, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+
+    // White outline
+    cv.drawPath(arrowPath, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color       = android.graphics.Color.WHITE
         style       = android.graphics.Paint.Style.STROKE
-        strokeWidth = size * 0.055f
-        alpha       = 210
+        strokeWidth = size * 0.06f
+        alpha       = 230
     })
-    cv.drawLine(cx, cy - fwd * 0.75f, cx, cy + aft * 0.6f,
-        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color       = android.graphics.Color.WHITE
-            strokeWidth = size * 0.04f
-            alpha       = 140
-        })
 
     return bmp
+}
+
+// ─── Compass heading format ───────────────────────────────────────────────────
+
+private fun formatBearing(deg: Float): String {
+    val cardinal = when (((deg + 22.5f) / 45f).toInt() % 8) {
+        0 -> "N"; 1 -> "NE"; 2 -> "E"; 3 -> "SE"
+        4 -> "S"; 5 -> "SW"; 6 -> "W"; else -> "NW"
+    }
+    return "$cardinal  ${deg.toInt()}°"
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────────────
@@ -372,10 +492,6 @@ private fun MapViewLifecycle(mapView: MapView) {
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
-            // Called when ChartsScreen leaves composition (navigation away).
-            // Without this, every visit creates a new MapView whose tile-download
-            // thread pool and GPU resources are never released, leaking memory
-            // until the system kills other apps via the low-memory killer.
             mapView.onDetach()
         }
     }

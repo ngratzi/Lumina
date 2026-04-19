@@ -10,6 +10,9 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,45 +34,49 @@ fun TidesScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val palette = LocalSkyTheme.current.palette
     var showStationPicker by remember { mutableStateOf(false) }
+    val pullState = rememberPullToRefreshState()
+    LaunchedEffect(pullState.isRefreshing) { if (pullState.isRefreshing) viewModel.refresh() }
+    LaunchedEffect(uiState.isLoading) { if (!uiState.isLoading) pullState.endRefresh() }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = innerPadding.calculateBottomPadding()),
-    ) {
-        if (uiState.isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = palette.accent,
-            )
-            return@Box
+    when {
+        uiState.isLoading && uiState.activeStation == null -> {
+            // Full-screen spinner on initial load only
+            Box(Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding())) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center), color = palette.accent)
+            }
         }
-
-        if (uiState.activeStation == null) {
-            Column(
-                modifier = Modifier.align(Alignment.Center).padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    "No tide station selected",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = palette.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = { showStationPicker = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+        uiState.activeStation == null -> {
+            // No station yet — let user pick one
+            Box(Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding())) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center).padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("Add a station", color = palette.gradientTop)
+                    Text(
+                        "No tide station selected",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { showStationPicker = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                    ) {
+                        Text("Add a station", color = palette.gradientTop)
+                    }
                 }
             }
-            return@Box
         }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 16.dp),
+        else -> Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = innerPadding.calculateBottomPadding())
+                .nestedScroll(pullState.nestedScrollConnection),
         ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 16.dp),
+            ) {
             // Station header
             item {
                 Row(
@@ -134,8 +141,10 @@ fun TidesScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
-        }
-    }
+        } // LazyColumn
+        PullToRefreshContainer(pullState, Modifier.align(Alignment.TopCenter))
+    } // Box
+} // when
 
     // Station picker bottom sheet
     if (showStationPicker) {

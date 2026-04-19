@@ -43,23 +43,27 @@ class WeatherRepository @Inject constructor(
 
             val now = ZonedDateTime.now(zone)
 
-            // Next 12 hours for display
+            // Next 24 hours for display
             val next12h = allHourly
                 .filter { !it.time.isBefore(now) }
-                .take(12)
+                .take(24)
 
-            // 24-hour pressure history for sparkline
+            // 24-hour pressure history (internal — used only for trend computation)
             val pressureHistory = allHourly
                 .filter { it.time.isBefore(now) || it.time == now }
                 .takeLast(24)
+
+            // 48-hour pressure window for hourly chart (24h past + 24h future)
+            val pressureHourly = allHourly
+                .filter { it.time.isAfter(now.minusHours(25)) && it.time.isBefore(now.plusHours(25)) }
                 .map { it.time to it.surfacePressure }
 
             // ── Pressure trend detection ────────────────────────────────────
             // Compare current pressure to 3 hours ago; maritime standard: >3 hPa/3h = rapid
             val currentPressure = current.surfacePressure
             val pressureThreeHoursAgo = pressureHistory
-                .lastOrNull { it.first.isBefore(now.minusHours(3).plusMinutes(30)) }
-                ?.second
+                .lastOrNull { it.time.isBefore(now.minusHours(3).plusMinutes(30)) }
+                ?.surfacePressure
             val pressureTrend = if (pressureThreeHoursAgo != null) {
                 val delta = currentPressure - pressureThreeHoursAgo
                 when {
@@ -100,11 +104,35 @@ class WeatherRepository @Inject constructor(
                 )
             }
 
+            // 7-day daily pressure: noon hourly value per forecast day
+            val pressureDaily = daily.mapNotNull { day ->
+                val noonEntry = allHourly
+                    .filter { it.time.toLocalDate() == day.date }
+                    .minByOrNull { abs(it.time.hour - 12) }
+                noonEntry?.let { day.date to it.surfacePressure }
+            }
+
+            // 7-day daily wind: max speed from daily DTO, direction from noon hourly
+            val windDailySummaries = daily.mapNotNull { day ->
+                val noonEntry = allHourly
+                    .filter { it.time.toLocalDate() == day.date }
+                    .minByOrNull { abs(it.time.hour - 12) }
+                noonEntry?.let {
+                    WindDailySummary(
+                        date          = day.date,
+                        maxSpeedKnots = day.windSpeedMaxKnots,
+                        directionDeg  = noonEntry.windDirectionDeg,
+                    )
+                }
+            }
+
             WeatherData(
-                current         = currentWeather,
-                hourly          = next12h,
-                daily           = daily,
-                pressureHistory = pressureHistory,
+                current             = currentWeather,
+                hourly              = next12h,
+                daily               = daily,
+                pressureHourly      = pressureHourly,
+                pressureDaily       = pressureDaily,
+                windDailySummaries  = windDailySummaries,
             )
         } catch (e: Exception) {
             null

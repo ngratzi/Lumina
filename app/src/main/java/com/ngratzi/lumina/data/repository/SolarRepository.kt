@@ -13,9 +13,9 @@ import javax.inject.Singleton
 class SolarRepository @Inject constructor() {
 
     // Results are pure math — no I/O, no caching needed
-    fun getSunTimes(date: LocalDate, lat: Double, lon: Double): SunTimes =
-        SolarCalculator.getSunTimes(date, lat, lon, ZoneId.systemDefault())
+    fun getSunTimes(date: LocalDate, lat: Double, lon: Double, zone: ZoneId = ZoneId.systemDefault()): SunTimes =
+        SolarCalculator.getSunTimes(date, lat, lon, zone)
 
-    fun getMoonData(date: LocalDate, lat: Double, lon: Double): MoonData =
-        MoonCalculator.getMoonData(date, lat, lon, ZoneId.systemDefault())
+    fun getMoonData(date: LocalDate, lat: Double, lon: Double, zone: ZoneId = ZoneId.systemDefault()): MoonData =
+        MoonCalculator.getMoonData(date, lat, lon, zone)
 }
