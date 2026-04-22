@@ -20,7 +20,7 @@ enum class ChartLayer(val displayName: String, val description: String) {
 
 data class ChartsUiState(
     val location: Location?        = null,
-    val isLocating: Boolean        = false,
+    val isLocating: Boolean        = true,
     val initialCenterDone: Boolean = false,
     val selectedLayer: ChartLayer  = ChartLayer.NAUTICAL,
 )

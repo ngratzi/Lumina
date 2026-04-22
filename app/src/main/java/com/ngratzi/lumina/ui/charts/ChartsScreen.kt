@@ -7,6 +7,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,7 +19,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +46,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.TilesOverlay
+import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import java.io.File
 
@@ -71,7 +79,12 @@ fun ChartsScreen(
         onDispose { sm.unregisterListener(listener) }
     }
 
+    // Tracks the map's current rotation so the compass rose stays in sync.
+    val mapRotationState = remember { mutableStateOf(0f) }
+
     // osmdroid config must run before MapView is constructed.
+    // Capture location now (already loaded by splash) so we can center immediately.
+    val initialLocation = uiState.location
     val mapView = remember(context) {
         Configuration.getInstance().apply {
             userAgentValue      = "Lumina/1.0"
@@ -83,9 +96,14 @@ fun ChartsScreen(
             setMultiTouchControls(true)
             isTilesScaledToDpi = true
             controller.setZoom(13.0)
+            initialLocation?.let { loc ->
+                controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
+            }
             zoomController.setVisibility(
                 org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER
             )
+            overlays.add(RotationGestureOverlay(this).apply { isEnabled = true })
+            overlays.add(MapOrientationWatcher { mapRotationState.value = it })
         }
     }
 
@@ -115,7 +133,7 @@ fun ChartsScreen(
     LaunchedEffect(uiState.location, uiState.initialCenterDone) {
         if (!uiState.initialCenterDone) {
             uiState.location?.let { loc ->
-                mapView.controller.animateTo(GeoPoint(loc.latitude, loc.longitude))
+                mapView.controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
                 viewModel.onInitialCenterDone()
             }
         }
@@ -146,6 +164,17 @@ fun ChartsScreen(
                 MapPill(uiState.selectedLayer.description)
             }
         }
+
+        // ── Compass rose ──────────────────────────────────────────────────────
+        CompassRose(
+            rotation = mapRotationState.value,
+            palette  = palette,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = 52.dp, end = 16.dp)
+                .size(44.dp),
+        )
 
         // ── Layer picker ──────────────────────────────────────────────────────
         Row(
@@ -470,6 +499,95 @@ private fun MapControlButton(
             } else {
                 Icon(icon, contentDescription = null, tint = palette.onSurface,
                     modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+// ─── Map orientation watcher ──────────────────────────────────────────────────
+
+/**
+ * Thin overlay that fires [onOrientation] with the map's current rotation angle
+ * (degrees, clockwise) on every draw pass. Used to keep the compass rose in sync.
+ */
+private class MapOrientationWatcher(
+    private val onOrientation: (Float) -> Unit,
+) : org.osmdroid.views.overlay.Overlay() {
+    override fun draw(canvas: android.graphics.Canvas, mapView: MapView, shadow: Boolean) {
+        onOrientation(mapView.mapOrientation)
+    }
+}
+
+// ─── Compass rose ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun CompassRose(rotation: Float, palette: SkyPalette, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val r  = size.minDimension / 2f
+
+        // Background disc
+        drawCircle(Color.Black.copy(alpha = 0.50f), r - 1.dp.toPx(), Offset(cx, cy))
+        drawCircle(Color.White.copy(alpha = 0.18f), r - 1.dp.toPx(), Offset(cx, cy),
+            style = Stroke(0.5.dp.toPx()))
+
+        // Tick marks at N / E / S / W
+        val tickOuter = r - 2.dp.toPx()
+        val tickInner = r - 6.dp.toPx()
+        rotate(-rotation, Offset(cx, cy)) {
+            for (deg in listOf(0f, 90f, 180f, 270f)) {
+                rotate(deg, Offset(cx, cy)) {
+                    drawLine(
+                        color       = Color.White.copy(alpha = 0.45f),
+                        start       = Offset(cx, cy - tickOuter),
+                        end         = Offset(cx, cy - tickInner),
+                        strokeWidth = 1.dp.toPx(),
+                    )
+                }
+            }
+
+            val needleR = r - 8.dp.toPx()
+
+            // North needle (accent)
+            drawPath(Path().apply {
+                moveTo(cx, cy - needleR)
+                lineTo(cx - needleR * 0.22f, cy + needleR * 0.12f)
+                lineTo(cx, cy - needleR * 0.05f)
+                lineTo(cx + needleR * 0.22f, cy + needleR * 0.12f)
+                close()
+            }, palette.accent)
+
+            // South needle (dim white)
+            drawPath(Path().apply {
+                moveTo(cx, cy + needleR)
+                lineTo(cx + needleR * 0.22f, cy - needleR * 0.12f)
+                lineTo(cx, cy + needleR * 0.05f)
+                lineTo(cx - needleR * 0.22f, cy - needleR * 0.12f)
+                close()
+            }, Color.White.copy(alpha = 0.35f))
+
+            // Center pin
+            drawCircle(Color.White, 2.5.dp.toPx(), Offset(cx, cy))
+
+            // Cardinal labels — drawn on the rotated canvas so they stay with the rose
+            val ts   = 7.dp.toPx()
+            val tr   = r - 9.5.dp.toPx()   // distance from center to label center
+            val base = ts * 0.35f           // baseline offset to visually center text
+            val cardinalPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                textSize  = ts
+                textAlign = android.graphics.Paint.Align.CENTER
+                typeface  = android.graphics.Typeface.DEFAULT_BOLD
+            }
+            drawIntoCanvas { canvas ->
+                canvas.nativeCanvas.apply {
+                    cardinalPaint.color = palette.accent.toArgb()
+                    drawText("N", cx, cy - tr + base, cardinalPaint)
+                    cardinalPaint.color = android.graphics.Color.argb(180, 255, 255, 255)
+                    drawText("S", cx, cy + tr + base, cardinalPaint)
+                    drawText("E", cx + tr, cy + base, cardinalPaint)
+                    drawText("W", cx - tr, cy + base, cardinalPaint)
+                }
             }
         }
     }

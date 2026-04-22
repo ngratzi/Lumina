@@ -430,16 +430,6 @@ private fun PressureHourlyChart(
             tick = tick.plusHours(6)
         }
 
-        // "Now" dashed line
-        val nowX = xFor(now).coerceIn(lp, lp + cw)
-        drawLine(
-            color       = nowColor,
-            start       = Offset(nowX, tp),
-            end         = Offset(nowX, tp + ch),
-            strokeWidth = 1.dp.toPx(),
-            pathEffect  = PathEffect.dashPathEffect(floatArrayOf(6f, 5f)),
-        )
-
         // Build point list
         val pts = data.map { (t, p) -> Offset(xFor(t), yFor(p)) }
 
@@ -457,6 +447,15 @@ private fun PressureHourlyChart(
             ),
         )
 
+        // "Now" vertical line — solid, drawn over area fill, under the curve
+        val nowX = xFor(now).coerceIn(lp, lp + cw)
+        drawLine(
+            color       = accent.copy(alpha = 0.75f),
+            start       = Offset(nowX, tp),
+            end         = Offset(nowX, tp + ch),
+            strokeWidth = 1.5.dp.toPx(),
+        )
+
         // Line
         drawPath(
             path = Path().apply {
@@ -467,8 +466,19 @@ private fun PressureHourlyChart(
             style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
 
+        // "Now" dot — interpolate y on the curve, draw glow + fill + white centre
+        val nowIdx = pts.indexOfLast { it.x <= nowX }.coerceAtLeast(0)
+        val nowY = if (nowIdx < pts.size - 1) {
+            val a = pts[nowIdx]; val b = pts[nowIdx + 1]
+            val t = if (b.x != a.x) (nowX - a.x) / (b.x - a.x) else 0f
+            a.y + t * (b.y - a.y)
+        } else pts.last().y
+        drawCircle(accent.copy(alpha = 0.22f), radius = 8.dp.toPx(),  center = Offset(nowX, nowY))
+        drawCircle(accent,                     radius = 4.dp.toPx(),  center = Offset(nowX, nowY))
+        drawCircle(Color.White.copy(alpha = 0.90f), radius = 1.5.dp.toPx(), center = Offset(nowX, nowY))
+
         // End dot
-        drawCircle(accent, radius = 3.dp.toPx(), center = pts.last())
+        drawCircle(accent.copy(alpha = 0.55f), radius = 3.dp.toPx(), center = pts.last())
     }
 }
 

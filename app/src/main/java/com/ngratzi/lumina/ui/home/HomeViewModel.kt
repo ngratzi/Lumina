@@ -155,11 +155,11 @@ class HomeViewModel @Inject constructor(
             "Nautical Dawn"     to st.nauticalDawn,
             "Blue Hour"         to st.blueHourStart,
             "Sunrise"           to st.sunrise,
-            "Golden Hour"       to st.goldenHourEnd,
+            "Daylight"          to st.goldenHourEnd,
             "Golden Hour"       to st.goldenHourStart,
             "Sunset"            to st.sunset,
-            "Blue Hour"         to st.blueHourEnd,
-            "Nautical Dusk"     to st.nauticalDusk,
+            "Nautical Dusk"     to st.blueHourEnd,
+            "Astronomical Dusk" to st.nauticalDusk,
         )
 
         // Try today's events first

@@ -244,8 +244,7 @@ private fun WindForecastChart(
         .coerceAtLeast(10.0)
 
     val gridStep = when {
-        maxSpeed > 30 -> 20.0
-        maxSpeed > 15 -> 10.0
+        maxSpeed > 40 -> 10.0
         else          ->  5.0
     }
     val gridLines = generateSequence(gridStep) { it + gridStep }
@@ -266,13 +265,15 @@ private fun WindForecastChart(
         val yAxisW      = 38.dp.toPx()
         val arrowZoneH  = 52.dp.toPx()   // direction arrow + speed label
         val timeLabelH  = 20.dp.toPx()
+        val slotPad     = 20.dp.toPx()   // inset first/last slot from y-axis and right edge
         val chartLeft   = yAxisW
         val chartTop    = arrowZoneH
         val chartBottom = h - timeLabelH
         val chartH      = chartBottom - chartTop
         val chartW      = w - chartLeft
+        val plotW       = chartW - 2 * slotPad
 
-        fun xOf(i: Int)      = chartLeft + (if (n <= 1) chartW / 2f else i.toFloat() / (n - 1) * chartW)
+        fun xOf(i: Int)      = chartLeft + slotPad + (if (n <= 1) plotW / 2f else i.toFloat() / (n - 1) * plotW)
         fun yOf(spd: Double) = chartBottom - (chartH * (spd / maxSpeed)).toFloat()
 
         val speedPts = List(n) { i -> Offset(xOf(i), yOf(observations[i].speedKnots)) }
@@ -399,6 +400,7 @@ private fun WindForecastChart(
             }
             drawContext.canvas.nativeCanvas.drawText(label, x, h - 4.dp.toPx(), timePaint)
         }
+
     }
 }
 

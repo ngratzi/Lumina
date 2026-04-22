@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lumina app icon foreground — 108×108dp adaptive icon canvas.
+  Safe zone: 72×72dp centred at (54,54); art is within that boundary.
+
+  Scene: sun rising at the horizon over ocean waves.
+  Drawing order (back to front):
+    1. Horizon atmospheric glow
+    2. Sun outer / mid glow (circles)
+    3. Ocean fill — covers the lower half of the sun, creating the half-sun effect
+    4. Wave crest highlight stripe
+    5. Sun core — sits on top; ocean has already clipped its visual lower half
+    6. 7 rays fanning above the horizon
+    7. Horizon line
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- ── 1. Horizon atmospheric glow (warm bar at the horizon) ────────────── -->
+    <path
+        android:fillColor="#E06818"
+        android:alpha="0.22"
+        android:pathData="M4,56 Q54,49 104,56 Q54,63 4,70 Z"/>
+
+    <!-- ── 2a. Sun outer glow  (center 54,65  r=22) ─────────────────────────── -->
+    <path
+        android:fillColor="#F5900C"
+        android:alpha="0.20"
+        android:pathData="M32,65 A22,22 0 1 0 76,65 A22,22 0 1 0 32,65"/>
+
+    <!-- ── 2b. Sun mid glow  (r=16) ──────────────────────────────────────────── -->
+    <path
+        android:fillColor="#F5B820"
+        android:alpha="0.45"
+        android:pathData="M38,65 A16,16 0 1 0 70,65 A16,16 0 1 0 38,65"/>
+
+    <!-- ── 3. Ocean fill with wave top edge ──────────────────────────────────── -->
+    <path
+        android:fillColor="#0D3868"
+        android:pathData="M0,65 C27,58 27,72 54,65 C81,58 81,72 108,65 L108,108 L0,108 Z"/>
+
+    <!-- ── 4. Wave crest highlight stripe ────────────────────────────────────── -->
+    <path
+        android:fillColor="#1A5898"
+        android:alpha="0.75"
+        android:pathData="M0,69 C27,62 27,76 54,69 C81,62 81,76 108,69
+                          L108,77 C81,84 81,70 54,77 C27,84 27,70 0,77 Z"/>
+
+    <!-- ── 5. Sun core  (r=11; ocean drawn above clips the lower half visually) -->
+    <path
+        android:fillColor="#FFE050"
+        android:pathData="M43,65 A11,11 0 1 0 65,65 A11,11 0 1 0 43,65"/>
+
+    <!-- ── 6. Rays fanning above the horizon from sun centre (54,65) ─────────
+         Angles given as compass bearings (0=up, CW).
+         start = r_inner 16  |  end = r_outer 26
+    -->
+    <!-- NNW 337.5° -->
+    <path
+        android:strokeColor="#F5C030"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M47.9,50.2 L44.0,41.0"/>
+    <!-- NW  315° -->
+    <path
+        android:strokeColor="#F5C030"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M42.7,53.7 L35.6,46.6"/>
+    <!-- N   0° (straight up) -->
+    <path
+        android:strokeColor="#F5C030"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:pathData="M54.0,49.0 L54.0,39.0"/>
+    <!-- NNE 22.5° -->
+    <path
+        android:strokeColor="#F5C030"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M60.1,50.2 L64.0,41.0"/>
+    <!-- NE  45° -->
+    <path
+        android:strokeColor="#F5C030"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M65.3,53.7 L72.4,46.6"/>
+    <!-- WNW 292.5° (shallow, near horizon) -->
+    <path
+        android:strokeColor="#F5C030"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:alpha="0.75"
+        android:pathData="M39.2,58.9 L30.0,55.0"/>
+    <!-- ENE 67.5° (shallow, near horizon) -->
+    <path
+        android:strokeColor="#F5C030"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:alpha="0.75"
+        android:pathData="M68.8,58.9 L78.0,55.0"/>
+
+    <!-- ── 7. Horizon line ────────────────────────────────────────────────────── -->
+    <path
+        android:strokeColor="#7ABCDC"
+        android:strokeWidth="1.2"
+        android:alpha="0.80"
+        android:pathData="M12,65 L96,65"/>
+
+</vector>

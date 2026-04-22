@@ -31,6 +31,8 @@ fun SkyDial(
     locationName: String,
     sunTimes: SunTimes?,
     moonData: MoonData?,
+    tideHeightText: String? = null,
+    nextTideText: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val midnight   = currentTime.toLocalDate().atStartOfDay(currentTime.zone)
@@ -60,15 +62,20 @@ fun SkyDial(
         label = "stars",
     )
 
-    Box(
-        modifier = modifier
+    Column(
+        modifier            = modifier
             .fillMaxWidth()
-            .height(460.dp)
             .background(
                 Brush.verticalGradient(
                     listOf(palette.gradientTop, palette.gradientMid, palette.gradientBottom)
                 )
             ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(460.dp),
     ) {
         // ── Canvas: stars, ring, celestial bodies ─────────────────────────────
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -280,7 +287,33 @@ fun SkyDial(
                 )
             }
         }
+    } // end inner Box
+
+    // Tide summary — below the canvas so it can't overflow the fixed-height drawing area
+    if (tideHeightText != null || nextTideText != null) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
+        ) {
+            tideHeightText?.let {
+                Text(
+                    text  = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette.onSurfaceVariant,
+                )
+            }
+            nextTideText?.let {
+                Text(
+                    text  = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+        }
+    } else {
+        Spacer(Modifier.height(16.dp))
     }
+    } // end outer Column
 }
 
 // ─── Segment data class ───────────────────────────────────────────────────────

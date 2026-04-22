@@ -9,16 +9,22 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.remember
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.ngratzi.lumina.ui.charts.ChartsViewModel
 import com.ngratzi.lumina.ui.home.HomeViewModel
 import com.ngratzi.lumina.ui.navigation.LuminaNavGraph
 import com.ngratzi.lumina.ui.theme.LuminaTheme
 import com.ngratzi.lumina.ui.theme.SkyThemeState
+import com.ngratzi.lumina.ui.tides.TidesViewModel
+import com.ngratzi.lumina.ui.weather.WeatherViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val homeViewModel: HomeViewModel by viewModels()
+    private val weatherViewModel: WeatherViewModel by viewModels()
+    private val tidesViewModel: TidesViewModel by viewModels()
+    private val chartsViewModel: ChartsViewModel by viewModels()
 
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -29,8 +35,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         splashScreen.setKeepOnScreenCondition {
-            val state = homeViewModel.uiState.value
-            state.isLoading && state.sunTimes == null
+            homeViewModel.uiState.value.isLoading ||
+            weatherViewModel.uiState.value.isLoading ||
+            tidesViewModel.uiState.value.isLoading ||
+            chartsViewModel.uiState.value.isLocating
         }
 
         enableEdgeToEdge()
@@ -45,7 +53,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             val skyTheme = remember { SkyThemeState() }
             LuminaTheme(skyTheme = skyTheme) {
-                LuminaNavGraph()
+                LuminaNavGraph(
+                    homeViewModel = homeViewModel,
+                    weatherViewModel = weatherViewModel,
+                    tidesViewModel = tidesViewModel,
+                    chartsViewModel = chartsViewModel,
+                )
             }
         }
     }
