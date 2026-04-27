@@ -15,10 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ngratzi.lumina.data.model.CurrentState
 import com.ngratzi.lumina.data.model.TideType
 import com.ngratzi.lumina.ui.home.components.*
 import com.ngratzi.lumina.ui.theme.LocalSkyTheme
 import com.ngratzi.lumina.ui.tides.TidesViewModel
+import com.ngratzi.lumina.ui.tides.components.buildEstimatedCurve
+import com.ngratzi.lumina.ui.tides.components.estimatedStrengthLabel
 import java.time.Duration
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,6 +85,38 @@ fun HomeScreen(
         "$label tide in $timeStr"
     }
 
+    val currentText = tidesState?.let { tides ->
+        val now = tides.currentTime
+        val currents = tides.currents
+        if (!currents.isNullOrEmpty()) {
+            // Real NOAA current data
+            val current = currents.lastOrNull { it.time.isBefore(now) } ?: currents.first()
+            val stateLabel = when (current.state) {
+                CurrentState.FLOOD -> "Flooding"
+                CurrentState.EBB   -> "Ebbing"
+                CurrentState.SLACK -> "Slack"
+            }
+            val next = currents.firstOrNull { it.time.isAfter(now) }
+            val nextPart = next?.let {
+                val dur = Duration.between(now, it.time)
+                val h = dur.toHours(); val m = dur.toMinutes() % 60
+                val timeStr = if (h > 0) "${h}h ${m}m" else "${m}m"
+                val nextLabel = when (it.state) {
+                    CurrentState.SLACK -> "slack"
+                    CurrentState.FLOOD -> "max flood"
+                    CurrentState.EBB   -> "max ebb"
+                }
+                " · $nextLabel in $timeStr"
+            } ?: ""
+            "$stateLabel ${"%.1f".format(current.velocityKnots)} kt$nextPart"
+        } else if (tides.predictedCurve.isNotEmpty()) {
+            // Estimated from tide derivative (this runs inside a let lambda, not in composition scope)
+            val curve = buildEstimatedCurve(tides.predictedCurve)
+            val vel = curve.minByOrNull { kotlin.math.abs(it.first.toEpochSecond() - now.toEpochSecond()) }?.second
+            vel?.let { "~${estimatedStrengthLabel(it)}" }
+        } else null
+    }
+
     // Full-screen spinner only on initial load (no data yet)
     if (uiState.isLoading && uiState.sunTimes == null) {
         Box(Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding())) {
@@ -125,6 +160,7 @@ fun HomeScreen(
                     moonData       = uiState.moonData,
                     tideHeightText = tideHeightText,
                     nextTideText   = nextTideText,
+                    currentText    = currentText,
                 )
             }
 
@@ -132,9 +168,10 @@ fun HomeScreen(
             uiState.sunTimes?.let { sunTimes ->
                 item {
                     SolarEventList(
-                        palette  = palette,
-                        sunTimes = sunTimes,
-                        moonData = uiState.moonData,
+                        palette      = palette,
+                        sunTimes     = sunTimes,
+                        moonData     = uiState.moonData,
+                        currentTime  = uiState.currentTime,
                     )
                 }
             }

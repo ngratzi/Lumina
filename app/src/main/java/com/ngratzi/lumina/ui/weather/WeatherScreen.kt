@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
@@ -164,6 +165,18 @@ fun WeatherScreen(
                     pressureHourly = weather.pressureHourly,
                     pressureDaily  = weather.pressureDaily,
                     modifier       = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+
+            // Rain
+            item {
+                RainCard(
+                    palette  = palette,
+                    hourly   = weather.hourly,
+                    daily    = weather.daily,
+                    modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                 )
@@ -357,12 +370,15 @@ private fun PressureHourlyChart(
     modifier: Modifier = Modifier,
 ) {
     if (data.size < 2) return
-    val accent      = palette.accent
-    val gridColor   = palette.outlineColor
-    val labelColor  = palette.onSurfaceVariant
-    val nowColor    = palette.accent.copy(alpha = 0.55f)
-    val now         = java.time.ZonedDateTime.now()
-    val hourFmt     = DateTimeFormatter.ofPattern("ha")
+    val accent     = palette.accent
+    val gridColor  = palette.outlineColor
+    val labelColor = palette.onSurfaceVariant
+    val now        = java.time.ZonedDateTime.now()
+    val hourFmt    = DateTimeFormatter.ofPattern("ha")
+
+    // Forward-looking only: start from now so "now" is the left edge.
+    val chartData = data.filter { !it.first.isBefore(now) }
+    if (chartData.size < 2) return
 
     Canvas(modifier = modifier) {
         val lp = 44.dp.toPx()
@@ -372,40 +388,35 @@ private fun PressureHourlyChart(
         val cw = size.width - lp - rp
         val ch = size.height - tp - bp
 
-        val pressures = data.map { it.second }
+        val pressures  = chartData.map { it.second }
         val rawMin = pressures.min(); val rawMax = pressures.max()
-        val pad = ((rawMax - rawMin) * 0.15).coerceAtLeast(2.0)
+        val pad  = ((rawMax - rawMin) * 0.15).coerceAtLeast(2.0)
         val minP = floor((rawMin - pad) / 2) * 2
         val maxP = ceil((rawMax + pad)  / 2) * 2
         val pRange = (maxP - minP).coerceAtLeast(4.0)
 
-        val startEpoch = data.first().first.toEpochSecond().toFloat()
-        val endEpoch   = data.last().first.toEpochSecond().toFloat()
+        val startEpoch = chartData.first().first.toEpochSecond().toFloat()
+        val endEpoch   = chartData.last().first.toEpochSecond().toFloat()
         val totalSec   = (endEpoch - startEpoch).coerceAtLeast(1f)
 
         fun xFor(t: java.time.ZonedDateTime) =
             lp + (t.toEpochSecond() - startEpoch) / totalSec * cw
-
         fun yFor(p: Double) =
             tp + ch - ((p - minP) / pRange * ch).toFloat()
 
         val labelPaint = AndroidPaint().apply {
-            isAntiAlias = true
-            textSize    = 9.5.dp.toPx()
-            textAlign   = AndroidPaint.Align.RIGHT
-            color       = labelColor.toArgb()
+            isAntiAlias = true; textSize = 9.5.dp.toPx()
+            textAlign = AndroidPaint.Align.RIGHT; color = labelColor.toArgb()
         }
         val xLabelPaint = AndroidPaint().apply {
-            isAntiAlias = true
-            textSize    = 9.5.dp.toPx()
-            textAlign   = AndroidPaint.Align.CENTER
-            color       = labelColor.toArgb()
+            isAntiAlias = true; textSize = 9.5.dp.toPx()
+            textAlign = AndroidPaint.Align.CENTER; color = labelColor.toArgb()
         }
 
-        // Y gridlines + labels (4 lines)
-        val ySteps = 4
-        repeat(ySteps + 1) { i ->
-            val p = minP + pRange / ySteps * i
+
+        // Y gridlines + labels
+        repeat(5) { i ->
+            val p = minP + pRange / 4 * i
             val y = yFor(p)
             drawLine(gridColor.copy(alpha = 0.25f), Offset(lp, y), Offset(lp + cw, y), 0.5.dp.toPx())
             drawContext.canvas.nativeCanvas.drawText(
@@ -413,25 +424,22 @@ private fun PressureHourlyChart(
             )
         }
 
-        // X gridlines + labels every 6h
-        val start = data.first().first
-        val step  = (6 - start.hour % 6).let { if (it == 6) 0 else it }.toLong()
-        var tick  = start.plusHours(step)
-            .truncatedTo(java.time.temporal.ChronoUnit.HOURS)
-        while (!tick.isAfter(data.last().first)) {
+        // X gridlines + labels at each 6h clock mark, skip the first slot (reserved for "now")
+        val firstHour  = chartData.first().first.truncatedTo(java.time.temporal.ChronoUnit.HOURS)
+        val hoursToNext = (6 - firstHour.hour % 6).let { if (it == 6) 6L else it.toLong() }
+        var tick = firstHour.plusHours(hoursToNext)
+        while (!tick.isAfter(chartData.last().first)) {
             val x = xFor(tick)
-            if (x >= lp - 1f && x <= lp + cw + 1f) {
+            if (x in (lp + 24.dp.toPx())..(lp + cw + 1f)) {
                 drawLine(gridColor.copy(alpha = 0.18f), Offset(x, tp), Offset(x, tp + ch), 0.5.dp.toPx())
                 drawContext.canvas.nativeCanvas.drawText(
-                    tick.format(hourFmt).lowercase(),
-                    x, tp + ch + bp - 4.dp.toPx(), xLabelPaint,
+                    tick.format(hourFmt).lowercase(), x, tp + ch + bp - 4.dp.toPx(), xLabelPaint,
                 )
             }
             tick = tick.plusHours(6)
         }
 
-        // Build point list
-        val pts = data.map { (t, p) -> Offset(xFor(t), yFor(p)) }
+        val pts = chartData.map { (t, p) -> Offset(xFor(t), yFor(p)) }
 
         // Area fill
         drawPath(
@@ -447,16 +455,7 @@ private fun PressureHourlyChart(
             ),
         )
 
-        // "Now" vertical line — solid, drawn over area fill, under the curve
-        val nowX = xFor(now).coerceIn(lp, lp + cw)
-        drawLine(
-            color       = accent.copy(alpha = 0.75f),
-            start       = Offset(nowX, tp),
-            end         = Offset(nowX, tp + ch),
-            strokeWidth = 1.5.dp.toPx(),
-        )
-
-        // Line
+        // Pressure line
         drawPath(
             path = Path().apply {
                 moveTo(pts.first().x, pts.first().y)
@@ -466,19 +465,8 @@ private fun PressureHourlyChart(
             style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
 
-        // "Now" dot — interpolate y on the curve, draw glow + fill + white centre
-        val nowIdx = pts.indexOfLast { it.x <= nowX }.coerceAtLeast(0)
-        val nowY = if (nowIdx < pts.size - 1) {
-            val a = pts[nowIdx]; val b = pts[nowIdx + 1]
-            val t = if (b.x != a.x) (nowX - a.x) / (b.x - a.x) else 0f
-            a.y + t * (b.y - a.y)
-        } else pts.last().y
-        drawCircle(accent.copy(alpha = 0.22f), radius = 8.dp.toPx(),  center = Offset(nowX, nowY))
-        drawCircle(accent,                     radius = 4.dp.toPx(),  center = Offset(nowX, nowY))
-        drawCircle(Color.White.copy(alpha = 0.90f), radius = 1.5.dp.toPx(), center = Offset(nowX, nowY))
-
-        // End dot
-        drawCircle(accent.copy(alpha = 0.55f), radius = 3.dp.toPx(), center = pts.last())
+        // Start dot at current pressure
+        drawCircle(accent.copy(alpha = 0.55f), 3.dp.toPx(), pts.first())
     }
 }
 
@@ -579,6 +567,250 @@ private fun PressureDailyChart(
 
         // Dots at each day
         pts.forEach { pt -> drawCircle(accent, radius = 3.dp.toPx(), center = pt) }
+    }
+}
+
+// ─── Rain Card ────────────────────────────────────────────────────────────────
+
+private enum class RainRange { HOURLY, DAILY }
+
+@Composable
+private fun RainCard(
+    palette: SkyPalette,
+    hourly: List<HourlyWeather>,
+    daily: List<DailyForecast>,
+    modifier: Modifier = Modifier,
+) {
+    var range by remember { mutableStateOf(RainRange.HOURLY) }
+    val currentProb = hourly.firstOrNull()?.precipProbability ?: 0
+    val shape = RoundedCornerShape(16.dp)
+
+    Surface(
+        modifier = modifier.clip(shape).border(0.5.dp, palette.outlineColor, shape),
+        color    = palette.surfaceDim,
+        shape    = shape,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Text("RAIN", style = MaterialTheme.typography.labelSmall, color = palette.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PressureRangeChip("24H",   range == RainRange.HOURLY, palette) { range = RainRange.HOURLY }
+                    PressureRangeChip("7 DAY", range == RainRange.DAILY,  palette) { range = RainRange.DAILY  }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    "$currentProb%",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = palette.onSurface,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "chance of rain",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = palette.outlineColor, thickness = 0.5.dp)
+            Spacer(Modifier.height(12.dp))
+
+            when (range) {
+                RainRange.HOURLY -> RainHourlyChart(
+                    palette  = palette,
+                    hourly   = hourly,
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                )
+                RainRange.DAILY -> RainDailyChart(
+                    palette  = palette,
+                    daily    = daily,
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RainHourlyChart(
+    palette: SkyPalette,
+    hourly: List<HourlyWeather>,
+    modifier: Modifier = Modifier,
+) {
+    if (hourly.isEmpty()) return
+    val accent = palette.accent
+    val n      = hourly.size
+
+    Canvas(modifier = modifier) {
+        val lp = 34.dp.toPx()
+        val rp =  8.dp.toPx()
+        val tp =  6.dp.toPx()
+        val bp = 20.dp.toPx()
+        val cw = size.width - lp - rp
+        val ch = size.height - tp - bp
+        val chartBottom = tp + ch
+
+        val slotW = cw / n
+        val barW  = (slotW * 0.65f).coerceAtLeast(2.dp.toPx())
+
+        fun xOf(i: Int)        = lp + (i + 0.5f) * slotW
+        fun yOf(prob: Int)     = tp + ch * (1f - prob / 100f)
+
+        val yAxisPaint = AndroidPaint().apply {
+            isAntiAlias = true; textSize = 9.5.dp.toPx()
+            textAlign = AndroidPaint.Align.RIGHT
+            color = palette.onSurfaceVariant.copy(alpha = 0.65f).toArgb()
+        }
+        val xLabelPaint = AndroidPaint().apply {
+            isAntiAlias = true; textSize = 9.5.dp.toPx()
+            textAlign = AndroidPaint.Align.CENTER
+            color = palette.onSurfaceVariant.copy(alpha = 0.75f).toArgb()
+        }
+
+        // Y gridlines + labels at 0 / 50 / 100 %
+        listOf(0, 50, 100).forEach { pct ->
+            val y = yOf(pct)
+            drawLine(
+                color       = palette.outlineColor.copy(alpha = 0.20f),
+                start       = Offset(lp, y),
+                end         = Offset(lp + cw, y),
+                strokeWidth = 0.5.dp.toPx(),
+            )
+            drawContext.canvas.nativeCanvas.drawText(
+                "$pct%", lp - 4.dp.toPx(), y + yAxisPaint.textSize * 0.35f, yAxisPaint,
+            )
+        }
+
+        // Bars
+        hourly.forEachIndexed { i, h ->
+            val x     = xOf(i)
+            val top   = yOf(h.precipProbability)
+            val alpha = (h.precipProbability / 100f * 0.75f + 0.15f).coerceIn(0.15f, 0.90f)
+            drawRect(
+                color    = accent.copy(alpha = alpha),
+                topLeft  = Offset(x - barW / 2f, top),
+                size     = Size(barW, chartBottom - top),
+            )
+        }
+
+        // X labels + grid every 6 hours
+        hourly.forEachIndexed { i, h ->
+            if (h.time.hour % 6 == 0) {
+                val x = xOf(i)
+                drawLine(
+                    color       = palette.outlineColor.copy(alpha = 0.12f),
+                    start       = Offset(x, tp),
+                    end         = Offset(x, chartBottom),
+                    strokeWidth = 0.5.dp.toPx(),
+                )
+                val label = when (val hr = h.time.hour) {
+                    0    -> "12a"
+                    12   -> "12p"
+                    in 1..11  -> "${hr}a"
+                    else -> "${hr - 12}p"
+                }
+                drawContext.canvas.nativeCanvas.drawText(
+                    label, x, chartBottom + bp - 4.dp.toPx(), xLabelPaint,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RainDailyChart(
+    palette: SkyPalette,
+    daily: List<DailyForecast>,
+    modifier: Modifier = Modifier,
+) {
+    if (daily.isEmpty()) return
+    val accent = palette.accent
+    val n      = daily.size
+    val today  = LocalDate.now()
+    val dayFmt = DateTimeFormatter.ofPattern("EEE")
+
+    Canvas(modifier = modifier) {
+        val lp = 34.dp.toPx()
+        val rp =  8.dp.toPx()
+        val tp = 18.dp.toPx()   // extra top room for % labels above bars
+        val bp = 20.dp.toPx()
+        val cw = size.width - lp - rp
+        val ch = size.height - tp - bp
+        val chartBottom = tp + ch
+
+        val slotW = cw / n
+        val barW  = slotW * 0.55f
+
+        fun xOf(i: Int)    = lp + (i + 0.5f) * slotW
+        fun yOf(prob: Int) = tp + ch * (1f - prob / 100f)
+
+        val yAxisPaint = AndroidPaint().apply {
+            isAntiAlias = true; textSize = 9.5.dp.toPx()
+            textAlign = AndroidPaint.Align.RIGHT
+            color = palette.onSurfaceVariant.copy(alpha = 0.65f).toArgb()
+        }
+        val dayPaint = AndroidPaint().apply {
+            isAntiAlias = true; textSize = 9.5.dp.toPx()
+            textAlign = AndroidPaint.Align.CENTER
+            color = palette.onSurfaceVariant.copy(alpha = 0.75f).toArgb()
+        }
+        val pctPaint = AndroidPaint().apply {
+            isAntiAlias = true; textSize = 8.5.dp.toPx()
+            textAlign = AndroidPaint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+
+        // Y gridlines at 0 / 50 / 100 %
+        listOf(0, 50, 100).forEach { pct ->
+            val y = yOf(pct)
+            drawLine(
+                color       = palette.outlineColor.copy(alpha = 0.20f),
+                start       = Offset(lp, y),
+                end         = Offset(lp + cw, y),
+                strokeWidth = 0.5.dp.toPx(),
+            )
+            drawContext.canvas.nativeCanvas.drawText(
+                "$pct%", lp - 4.dp.toPx(), y + yAxisPaint.textSize * 0.35f, yAxisPaint,
+            )
+        }
+
+        daily.forEachIndexed { i, day ->
+            val x     = xOf(i)
+            val top   = yOf(day.precipProbability)
+            val alpha = (day.precipProbability / 100f * 0.75f + 0.15f).coerceIn(0.15f, 0.90f)
+
+            // Bar
+            drawRect(
+                color   = accent.copy(alpha = alpha),
+                topLeft = Offset(x - barW / 2f, top),
+                size    = Size(barW, chartBottom - top),
+            )
+
+            // % label above bar
+            pctPaint.color = accent.copy(alpha = 0.85f).toArgb()
+            drawContext.canvas.nativeCanvas.drawText(
+                "${day.precipProbability}%", x, top - 3.dp.toPx(), pctPaint,
+            )
+
+            // Day label
+            val label = when (day.date) {
+                today             -> "Today"
+                today.plusDays(1) -> "Tmrw"
+                else              -> day.date.format(dayFmt)
+            }
+            drawContext.canvas.nativeCanvas.drawText(
+                label, x, chartBottom + bp - 4.dp.toPx(), dayPaint,
+            )
+        }
     }
 }
 

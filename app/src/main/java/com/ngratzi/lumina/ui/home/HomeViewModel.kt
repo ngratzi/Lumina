@@ -74,6 +74,7 @@ class HomeViewModel @Inject constructor(
 
     private fun loadLocation() {
         viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
             val location = locationRepo.getLocation()
             if (location == null) {
                 _uiState.update { it.copy(isLoading = false, error = "Location unavailable") }

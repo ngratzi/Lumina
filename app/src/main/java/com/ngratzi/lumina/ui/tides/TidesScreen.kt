@@ -119,17 +119,16 @@ fun TidesScreen(
                 )
             }
 
-            // Tidal current card (only when data available)
-            uiState.currents?.takeIf { it.isNotEmpty() }?.let { currents ->
-                item {
-                    CurrentCard(
-                        palette = palette,
-                        currents = currents,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
+            // Tidal current card (always shown; falls back to tide-derived estimate)
+            item {
+                CurrentCard(
+                    palette = palette,
+                    currents = uiState.currents,
+                    predictedCurve = uiState.predictedCurve,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
             }
 
             // 7-day tide list

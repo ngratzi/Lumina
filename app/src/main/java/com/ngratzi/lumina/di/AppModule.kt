@@ -8,7 +8,13 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.ngratzi.lumina.data.local.LuminaDatabase
+import com.ngratzi.lumina.data.local.MIGRATION_1_2
+import com.ngratzi.lumina.data.local.MIGRATION_2_3
+import com.ngratzi.lumina.data.local.TrackDao
+import com.ngratzi.lumina.data.local.WaypointDao
 import com.ngratzi.lumina.data.remote.NoaaApiService
+import com.ngratzi.lumina.data.repository.TrackRepository
+import com.ngratzi.lumina.data.repository.WaypointRepository
 import com.ngratzi.lumina.data.remote.NoaaStationApiService
 import com.ngratzi.lumina.data.remote.OpenMeteoApiService
 import dagger.Module
@@ -88,13 +94,30 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): LuminaDatabase =
-        Room.databaseBuilder(context, LuminaDatabase::class.java, "lumina.db").build()
+        Room.databaseBuilder(context, LuminaDatabase::class.java, "lumina.db")
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .build()
 
     @Provides
     fun provideAlarmDao(db: LuminaDatabase) = db.alarmDao()
 
     @Provides
     fun provideTideStationDao(db: LuminaDatabase) = db.tideStationDao()
+
+    @Provides
+    fun provideWaypointDao(db: LuminaDatabase) = db.waypointDao()
+
+    @Provides
+    @Singleton
+    fun provideWaypointRepository(dao: WaypointDao): WaypointRepository =
+        WaypointRepository(dao)
+
+    @Provides
+    fun provideTrackDao(db: LuminaDatabase): TrackDao = db.trackDao()
+
+    @Provides
+    @Singleton
+    fun provideTrackRepository(dao: TrackDao): TrackRepository = TrackRepository(dao)
 
     @Provides
     @Singleton

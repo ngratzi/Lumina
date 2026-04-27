@@ -29,6 +29,7 @@ fun SolarEventList(
     palette: SkyPalette,
     sunTimes: SunTimes,
     moonData: MoonData?,
+    currentTime: ZonedDateTime,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -82,7 +83,12 @@ fun SolarEventList(
                     "${moonData.phaseEmoji} ${moonData.phaseName}",
                     valueWeight = FontWeight.Medium)
                 LunarRow(palette, "Illumination", "${(moonData.illumination * 100).roundToInt()}%")
-                LunarRow(palette, "Rise",    moonData.moonrise?.let    { TimeFormatter.formatTime(it) } ?: "—")
+                val localMidnight = currentTime.toLocalDate().atStartOfDay(currentTime.zone)
+                val moonriseDisplay = moonData.moonrise?.let { rise ->
+                    val t = TimeFormatter.formatTime(rise)
+                    if (rise.isBefore(localMidnight)) "← $t" else t
+                } ?: "—"
+                LunarRow(palette, "Rise", moonriseDisplay)
                 LunarRow(palette, "Transit", moonData.moonTransit?.let { TimeFormatter.formatTime(it) } ?: "—")
                 LunarRow(palette, "Set",     moonData.moonset?.let     { TimeFormatter.formatTime(it) } ?: "—")
                 Spacer(Modifier.height(4.dp))

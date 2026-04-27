@@ -33,6 +33,7 @@ fun SkyDial(
     moonData: MoonData?,
     tideHeightText: String? = null,
     nextTideText: String? = null,
+    currentText: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val midnight   = currentTime.toLocalDate().atStartOfDay(currentTime.zone)
@@ -132,19 +133,18 @@ fun SkyDial(
                 style  = Stroke(moonRingStroke, cap = StrokeCap.Butt),
             )
 
-            // Lit arc: moon above horizon (moonrise → moonset clipped to today)
+            // Lit arc: moon above horizon (moonrise → moonset, spanning past midnight if needed)
             if (moonriseMs != null) {
-                val dayEnd       = midnightMs + dayMs
-                // Clamp to today's window — handles "already up at midnight" and "still up tomorrow"
-                val clampedRise  = moonriseMs.coerceIn(midnightMs, dayEnd)
-                val clampedSet   = (moonsetMs ?: dayEnd).coerceIn(midnightMs, dayEnd)
-                val riseFrac     = ((clampedRise - midnightMs).toFloat() / dayMs).coerceIn(0f, 1f)
-                val setFrac      = ((clampedSet  - midnightMs).toFloat() / dayMs).coerceIn(0f, 1f)
-                val sweepAngle   = (setFrac - riseFrac) * 360f
+                val dayEnd      = midnightMs + dayMs
+                val rawSetMs    = moonsetMs ?: dayEnd
+                // Clamp the start to today's window; compute sweep from the actual above-horizon
+                // duration so an after-midnight moonset (e.g. 2 AM tomorrow) doesn't get cut at 12 AM.
+                val clampedRise = moonriseMs.coerceIn(midnightMs, dayEnd)
+                val riseFrac    = ((clampedRise - midnightMs).toFloat() / dayMs).coerceIn(0f, 1f)
+                val sweepAngle  = ((rawSetMs - clampedRise).toFloat() / dayMs).coerceIn(0f, 1f) * 360f
+                val illum       = ((moonData?.illumination ?: 0.5) * 0.5 + 0.3).toFloat()
+                val litColor    = Color(0xFFBBCCDD).copy(alpha = illum)
                 if (sweepAngle > 0.1f) {
-                    // Illumination-tinted: brighter = more lit moon
-                    val illum      = ((moonData?.illumination ?: 0.5) * 0.5 + 0.3).toFloat()
-                    val litColor   = Color(0xFFBBCCDD).copy(alpha = illum)
                     drawArc(
                         color      = litColor,
                         startAngle = -90f + riseFrac * 360f,
@@ -153,6 +153,21 @@ fun SkyDial(
                         topLeft    = Offset(cx - moonRingRadius, cy - moonRingRadius),
                         size       = Size(moonRingRadius * 2f, moonRingRadius * 2f),
                         style      = Stroke(moonRingStroke, cap = StrokeCap.Butt),
+                    )
+                }
+                // When the moon rose before midnight, draw a faded arc from the actual
+                // moonrise position clockwise to midnight, showing yesterday's above-horizon window.
+                if (moonriseMs < midnightMs) {
+                    val riseToMidnightFrac = (moonriseMs - midnightMs).toFloat() / dayMs // negative
+                    val yesterdaySweep = (-riseToMidnightFrac * 360f).coerceIn(0f, 360f)
+                    drawArc(
+                        color      = litColor,
+                        startAngle = -90f + riseToMidnightFrac * 360f, // actual rise position
+                        sweepAngle = yesterdaySweep,
+                        useCenter  = false,
+                        topLeft    = Offset(cx - moonRingRadius, cy - moonRingRadius),
+                        size       = Size(moonRingRadius * 2f, moonRingRadius * 2f),
+                        style      = Stroke(moonRingStroke, cap = StrokeCap.Round),
                     )
                 }
             }
@@ -290,7 +305,7 @@ fun SkyDial(
     } // end inner Box
 
     // Tide summary — below the canvas so it can't overflow the fixed-height drawing area
-    if (tideHeightText != null || nextTideText != null) {
+    if (tideHeightText != null || nextTideText != null || currentText != null) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
@@ -303,6 +318,13 @@ fun SkyDial(
                 )
             }
             nextTideText?.let {
+                Text(
+                    text  = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+            currentText?.let {
                 Text(
                     text  = it,
                     style = MaterialTheme.typography.bodySmall,
